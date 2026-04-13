@@ -1,0 +1,32 @@
+[project]
+name = "uv-django"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "celery>=5.6.3",
+    "django>=6.0.4",
+    "django-filter>=25.2",
+    "djangorestframework>=3.17.1",
+    "djangorestframework-simplejwt>=5.5.1",
+    "httpx>=0.28.1",
+    "openpyxl>=3.1.5",
+    "psycopg[binary]>=3.3.3",
+    "python-dotenv>=1.2.2",
+    "redis>=7.4.0",
+]
+
+[dependency-groups]
+dev = [
+    "factory-boy>=3.3.3",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "pytest-django>=4.12.0",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "route_fuel_v2.settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+addopts = "-q --strict-markers --disable-warnings"
+testpaths = ["tests", "stations/tests"]
