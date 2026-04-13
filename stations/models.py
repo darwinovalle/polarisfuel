@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.core.validators import MinValueValidator
 from decimal import Decimal
@@ -45,6 +46,14 @@ class CurrentPrice(models.Model):
         max_digits=6,
         decimal_places=3,
         validators=[MinValueValidator(Decimal("0.00"))]
+    )
+
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
     )
 
     def __str__(self):
