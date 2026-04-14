@@ -13,7 +13,13 @@ class OsrmDirectionsProvider:
         self.max_retries = max_retries
         self.base_url = "https://router.project-osrm.org/route/v1/driving"
 
-    def route(self, origin: dict, destination: dict, waypoints: list | None = None) -> dict:
+    def route(
+        self,
+        origin: dict,
+        destination: dict,
+        waypoints: list | None = None,
+        include_alternatives: bool = False,
+    ) -> dict:
         coords = [f'{origin["lon"]},{origin["lat"]}']
 
         if waypoints:
@@ -28,9 +34,16 @@ class OsrmDirectionsProvider:
 
         for _ in range(self.max_retries):
             try:
+                params = {
+                    "overview": "full",
+                    "geometries": "geojson",
+                }
+                if include_alternatives:
+                    params["alternatives"] = "true"
+
                 response = httpx.get(
                     url,
-                    params={"overview": "false"},
+                    params=params,
                     timeout=self.timeout,
                 )
             except httpx.TimeoutException as exc:
@@ -52,14 +65,40 @@ class OsrmDirectionsProvider:
             if not routes:
                 raise ProviderBadResponseError("OSRM returned no routes")
 
-            first = routes[0]
-            try:
-                return {
-                    "distance_m": first["distance"],
-                    "duration_s": first["duration"],
-                    "geometry": first.get("geometry", ""),
-                }
-            except KeyError as exc:
-                raise ProviderBadResponseError("Malformed OSRM route payload") from exc
+            parsed_routes = []
+            for route in routes:
+                try:
+                    geometry = route.get("geometry", "")
+
+                    if isinstance(geometry, dict):
+                        coordinates = geometry.get("coordinates", [])
+                        if isinstance(coordinates, list):
+                            # GeoJSON coordinates are [lon, lat]; Leaflet expects [lat, lon].
+                            geometry = [
+                                [float(coord[1]), float(coord[0])]
+                                for coord in coordinates
+                                if isinstance(coord, (list, tuple)) and len(coord) >= 2
+                            ]
+
+                    parsed_routes.append(
+                        {
+                            "distance_m": float(route["distance"]),
+                            "duration_s": float(route["duration"]),
+                            "geometry": geometry,
+                        }
+                    )
+                except (KeyError, TypeError, ValueError):
+                    continue
+
+            if not parsed_routes:
+                raise ProviderBadResponseError("Malformed OSRM route payload")
+
+            first = parsed_routes[0]
+            return {
+                "distance_m": first["distance_m"],
+                "duration_s": first["duration_s"],
+                "geometry": first["geometry"],
+                "alternatives": parsed_routes,
+            }
 
         raise ProviderTimeoutError("OSRM request timed out") from last_error

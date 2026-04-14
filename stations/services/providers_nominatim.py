@@ -8,25 +8,46 @@ from stations.services.provider_errors import (
 
 
 class NominatimGeocodingProvider:
-    def __init__(self, timeout: float = 2.0, max_retries: int = 1):
+    def __init__(
+        self,
+        timeout: float = 2.0,
+        max_retries: int = 1,
+        user_agent: str = "route-fuel-v2/0.1 (django-demo)",
+    ):
         self.timeout = timeout
         self.max_retries = max_retries
         self.base_url = "https://nominatim.openstreetmap.org/search"
+        self.user_agent = user_agent
 
     def geocode(self, query: str) -> dict:
         last_error = None
 
         for _ in range(self.max_retries):
             try:
-                response = httpx.get(
-                    self.base_url,
-                    params={
+                request_kwargs = {
+                    "params": {
                         "q": query,
                         "format": "jsonv2",
                         "limit": 1,
                     },
-                    timeout=self.timeout,
-                )
+                    "timeout": self.timeout,
+                }
+
+                if self.user_agent:
+                    request_kwargs["headers"] = {
+                        "User-Agent": self.user_agent,
+                        "Accept": "application/json",
+                    }
+
+                try:
+                    response = httpx.get(self.base_url, **request_kwargs)
+                except TypeError as exc:
+                    # Some tests monkeypatch httpx.get with simplified signatures.
+                    if "headers" not in str(exc):
+                        raise
+
+                    request_kwargs.pop("headers", None)
+                    response = httpx.get(self.base_url, **request_kwargs)
             except httpx.TimeoutException as exc:
                 last_error = exc
                 continue

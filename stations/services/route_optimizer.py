@@ -5,13 +5,26 @@ from typing import Any
 
 
 class RouteOptimizer:
-    def __init__(self, geocoding_provider, directions_provider, vehicle_km_per_liter: float = 3.0):
-        if vehicle_km_per_liter <= 0:
-            raise ValueError("vehicle_km_per_liter must be > 0")
+    def __init__(
+        self,
+        geocoding_provider,
+        directions_provider,
+        vehicle_km_per_liter: float = 3.0,
+        vehicle_miles_per_gallon: float | None = None,
+    ):
+        if vehicle_miles_per_gallon is None:
+            if vehicle_km_per_liter <= 0:
+                raise ValueError("vehicle_km_per_liter must be > 0")
+            # Backward compatibility: convert km/L to MPG.
+            vehicle_miles_per_gallon = float(vehicle_km_per_liter) * 2.352145833
+
+        if vehicle_miles_per_gallon <= 0:
+            raise ValueError("vehicle_miles_per_gallon must be > 0")
 
         self.geocoding_provider = geocoding_provider
         self.directions_provider = directions_provider
-        self.vehicle_km_per_liter = float(vehicle_km_per_liter)
+        self.vehicle_miles_per_gallon = float(vehicle_miles_per_gallon)
+        self.vehicle_km_per_liter = self.vehicle_miles_per_gallon / 2.352145833
 
     def optimize(
         self,
@@ -19,16 +32,20 @@ class RouteOptimizer:
         destination_query: str,
         candidate_stations: list[dict[str, Any]],
         weights: dict[str, float] | None = None,
+        origin_coords: dict[str, Any] | None = None,
+        destination_coords: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if not candidate_stations:
             raise ValueError("candidate_stations cannot be empty")
 
         weights = self._normalize_weights(weights)
 
-        origin = self.geocoding_provider.geocode(origin_query)
-        destination = self.geocoding_provider.geocode(destination_query)
-
-        baseline = self.directions_provider.route(origin, destination)
+        if origin_coords is not None and destination_coords is not None:
+            origin = self._normalize_coordinate(origin_coords, origin_query)
+            destination = self._normalize_coordinate(destination_coords, destination_query)
+        else:
+            origin = self.geocoding_provider.geocode(origin_query)
+            destination = self.geocoding_provider.geocode(destination_query)
 
         alternatives: list[dict[str, Any]] = []
         for station in candidate_stations:
@@ -73,7 +90,7 @@ class RouteOptimizer:
         return {
             "origin": origin,
             "destination": destination,
-            "baseline_route": baseline,
+            "baseline_route": None,
             "weights": weights,
             "best_option": best_option,
             "alternatives": alternatives,
@@ -81,10 +98,25 @@ class RouteOptimizer:
             "best_path_cost": best_cost,
         }
 
+    @staticmethod
+    def _normalize_coordinate(value: dict[str, Any], default_name: str) -> dict[str, Any]:
+        try:
+            lat = float(value["lat"])
+            lon = float(value["lon"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("invalid coordinate payload") from exc
+
+        return {
+            "lat": lat,
+            "lon": lon,
+            "display_name": value.get("display_name", default_name),
+        }
+
     def _estimate_fuel_cost(self, distance_m: float, retail_price: float) -> float:
-        distance_km = distance_m / 1000.0
-        liters_needed = distance_km / self.vehicle_km_per_liter
-        return liters_needed * retail_price
+        # Retail price is USD per gallon, so use miles and MPG.
+        distance_miles = distance_m / 1609.344
+        gallons_needed = distance_miles / self.vehicle_miles_per_gallon
+        return gallons_needed * retail_price
 
     def _apply_scores(self, alternatives: list[dict[str, Any]], weights: dict[str, float]) -> None:
         durations = [x["duration_s"] for x in alternatives]
