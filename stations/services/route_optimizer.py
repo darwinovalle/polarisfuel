@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import heapq
 from typing import Any
 
 
@@ -57,13 +58,27 @@ class RouteOptimizer:
         self._apply_scores(alternatives, weights)
         alternatives.sort(key=lambda x: x["score"])
 
+        graph = self._build_station_graph(alternatives)
+        best_cost, best_path = self._dijkstra_shortest_path(graph, "START", "END")
+        best_station_id = best_path[1] if len(best_path) >= 3 else None
+
+        if best_station_id is None:
+            best_option = alternatives[0]
+        else:
+            best_option = next(
+                (item for item in alternatives if str(item["station"]["id"]) == best_station_id),
+                alternatives[0],
+            )
+
         return {
             "origin": origin,
             "destination": destination,
             "baseline_route": baseline,
             "weights": weights,
-            "best_option": alternatives[0],
+            "best_option": best_option,
             "alternatives": alternatives,
+            "best_path": best_path,
+            "best_path_cost": best_cost,
         }
 
     def _estimate_fuel_cost(self, distance_m: float, retail_price: float) -> float:
@@ -86,6 +101,61 @@ class RouteOptimizer:
             item["time_norm"] = time_norm
             item["price_norm"] = price_norm
             item["score"] = score
+
+    @staticmethod
+    def _build_station_graph(alternatives: list[dict[str, Any]]) -> dict[str, list[tuple[str, float]]]:
+        graph: dict[str, list[tuple[str, float]]] = {"START": [], "END": []}
+
+        for item in alternatives:
+            station_id = str(item["station"]["id"])
+            graph["START"].append((station_id, float(item["score"])))
+            graph[station_id] = [("END", 0.0)]
+
+        graph["START"] = sorted(graph["START"], key=lambda x: x[0])
+        return graph
+
+    @staticmethod
+    def _dijkstra_shortest_path(
+        graph: dict[str, list[tuple[str, float]]],
+        start: str,
+        end: str,
+    ) -> tuple[float, list[str]]:
+        if start not in graph or end not in graph:
+            raise ValueError("start or end node not in graph")
+
+        pq: list[tuple[float, tuple[str, ...], str]] = []
+        heapq.heappush(pq, (0.0, (start,), start))
+
+        best: dict[str, tuple[float, tuple[str, ...]]] = {start: (0.0, (start,))}
+
+        while pq:
+            cost, path, node = heapq.heappop(pq)
+
+            if node == end:
+                return cost, list(path)
+
+            known = best.get(node)
+            if known is None:
+                continue
+
+            if cost > known[0] or (cost == known[0] and path > known[1]):
+                continue
+
+            for neighbor, weight in sorted(graph.get(node, []), key=lambda x: x[0]):
+                if weight < 0:
+                    raise ValueError("Dijkstra requires non-negative weights")
+
+                new_cost = cost + float(weight)
+                new_path = path + (neighbor,)
+
+                candidate = (new_cost, new_path)
+                current = best.get(neighbor)
+
+                if current is None or candidate < current:
+                    best[neighbor] = candidate
+                    heapq.heappush(pq, (new_cost, new_path, neighbor))
+
+        raise ValueError("No path found")
 
     @staticmethod
     def _min_max_norm(value: float, min_value: float, max_value: float) -> float:

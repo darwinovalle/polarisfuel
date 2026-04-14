@@ -135,3 +135,58 @@ def test_output_contains_score_breakdown(candidate_stations):
     assert "distance_m" in first
     assert "duration_s" in first
     assert "estimated_fuel_cost" in first
+
+
+def test_dijkstra_finds_lowest_cost_path_on_small_graph():
+    graph = {
+        "START": [("A", 4.0), ("B", 1.0)],
+        "A": [("END", 1.0)],
+        "B": [("A", 2.0), ("END", 5.0)],
+        "END": [],
+    }
+
+    cost, path = RouteOptimizer._dijkstra_shortest_path(graph, "START", "END")
+
+    assert cost == pytest.approx(4.0)
+    assert path == ["START", "B", "A", "END"]
+
+
+def test_dijkstra_raises_when_unreachable():
+    graph = {
+        "START": [("A", 1.0)],
+        "A": [],
+        "END": [],
+    }
+
+    with pytest.raises(ValueError, match="No path found"):
+        RouteOptimizer._dijkstra_shortest_path(graph, "START", "END")
+
+
+def test_dijkstra_deterministic_tie_chooses_lexicographically_smaller_path():
+    graph = {
+        "START": [("A", 2.0), ("B", 2.0)],
+        "A": [("END", 2.0)],
+        "B": [("END", 2.0)],
+        "END": [],
+    }
+
+    cost, path = RouteOptimizer._dijkstra_shortest_path(graph, "START", "END")
+
+    assert cost == pytest.approx(4.0)
+    assert path == ["START", "A", "END"]
+
+
+@pytest.mark.django_db
+def test_optimize_exposes_dijkstra_path(candidate_stations):
+    optimizer = build_optimizer()
+
+    result = optimizer.optimize(
+        origin_query="Dallas, TX",
+        destination_query="New York, NY",
+        candidate_stations=candidate_stations,
+        weights={"time": 0.6, "price": 0.4},
+    )
+
+    assert "best_path" in result
+    assert result["best_path"][0] == "START"
+    assert result["best_path"][-1] == "END"
