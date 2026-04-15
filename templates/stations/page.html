@@ -8,6 +8,7 @@
 
   <link rel="stylesheet" href="{% static 'stations/vendor/leaflet/leaflet.css' %}" />
   <link rel="stylesheet" href="{% static 'stations/css/page.css' %}" />
+  <link rel="stylesheet" href="{% static 'stations/css/help-sidebar.css' %}" />
 </head>
 <body data-optimize-url="{% url 'stations-optimize' %}" data-suggest-url="{% url 'stations-suggest' %}">
   <div class="app">
@@ -118,7 +119,106 @@
     </section>
   </div>
 
+  <button
+    id="helpSidebarToggle"
+    class="help-sidebar-toggle"
+    type="button"
+    aria-label="Open usage guide"
+    aria-controls="helpSidebar"
+    aria-expanded="false"
+  >
+    <span class="help-sidebar-toggle-icon" aria-hidden="true">i</span>
+    <span class="help-sidebar-toggle-label">Guide</span>
+  </button>
+
+  <div id="helpSidebarBackdrop" class="help-sidebar-backdrop" hidden></div>
+
+  <aside id="helpSidebar" class="help-sidebar" aria-hidden="true" aria-label="Pathfinder usage guide">
+    <div class="help-sidebar-header">
+      <div>
+        <p class="help-sidebar-kicker">Pathfinder Guide</p>
+        <h2 class="help-sidebar-title">How to configure your best route</h2>
+      </div>
+      <button id="helpSidebarClose" class="help-sidebar-close" type="button" aria-label="Close guide">X</button>
+    </div>
+
+    <div class="help-sidebar-content">
+      <section class="help-guide-section">
+        <h3 class="help-guide-title">Quick Start</h3>
+        <ol>
+          <li>Type a valid origin and destination in the U.S.</li>
+          <li>Set Time and Price weights based on your preference.</li>
+          <li>Fill Vehicle MPG, Tank Capacity, and Start Fuel.</li>
+          <li>Select one route option from the ranked list.</li>
+          <li>Review distance, duration, fuel cost, and stop details.</li>
+        </ol>
+        <p class="help-guide-tip">
+          Tip: start with balanced weights, then move one slider at a time to understand route behavior.
+        </p>
+      </section>
+
+      <section class="help-guide-section">
+        <h3 class="help-guide-title">Parameter Guide</h3>
+        <div class="help-param-grid">
+          <article class="help-param-item">
+            <h4 class="help-param-name">Time Weight</h4>
+            <p class="help-param-desc">Higher values prioritize shorter travel time even if fuel cost rises.</p>
+          </article>
+          <article class="help-param-item">
+            <h4 class="help-param-name">Price Weight</h4>
+            <p class="help-param-desc">Higher values prioritize lower estimated fuel spend and efficient stop choices.</p>
+          </article>
+          <article class="help-param-item">
+            <h4 class="help-param-name">Vehicle MPG</h4>
+            <p class="help-param-desc">Use your real-world MPG. Lower MPG usually increases cost and stop count.</p>
+          </article>
+          <article class="help-param-item">
+            <h4 class="help-param-name">Tank Capacity</h4>
+            <p class="help-param-desc">Bigger tank means longer range and often fewer refuel stops.</p>
+          </article>
+          <article class="help-param-item">
+            <h4 class="help-param-name">Start Fuel (%)</h4>
+            <p class="help-param-desc">Initial fuel level impacts first-leg range and minimum required stops.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="help-guide-section">
+        <h3 class="help-guide-title">Tuning Playbooks</h3>
+        <details>
+          <summary>Fastest arrival</summary>
+          <p>Set Time high and Price lower. Good for tight delivery windows or schedule constraints.</p>
+        </details>
+        <details>
+          <summary>Lowest fuel spend</summary>
+          <p>Set Price high and Time lower. Useful when fuel budget is the primary objective.</p>
+        </details>
+        <details>
+          <summary>Balanced operations</summary>
+          <p>Keep Time and Price near mid-range values for a practical compromise of speed and cost.</p>
+        </details>
+      </section>
+
+      <section class="help-guide-section">
+        <h3 class="help-guide-title">Understand The Output</h3>
+        <ul>
+          <li>Route Options rank from best score to worst score.</li>
+          <li>Distance and Duration show physical and time impact.</li>
+          <li>Fuel Cost estimates trip fuel expense using your assumptions.</li>
+          <li>Score is a weighted metric from your Time and Price sliders.</li>
+          <li>Route Details and map markers show the exact stop sequence.</li>
+        </ul>
+        <div class="help-badge-row">
+          <span class="help-badge">Fast route: high time weight</span>
+          <span class="help-badge">Cheaper route: high price weight</span>
+          <span class="help-badge">Fewer stops: larger range</span>
+        </div>
+      </section>
+    </div>
+  </aside>
+
   <script src="{% static 'stations/vendor/leaflet/leaflet.js' %}"></script>
   <script src="{% static 'stations/js/page.js' %}"></script>
+  <script src="{% static 'stations/js/help-sidebar.js' %}"></script>
 </body>
 </html>
