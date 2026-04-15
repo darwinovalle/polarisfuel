@@ -5,9 +5,8 @@ from stations.services.provider_errors import (
     ProviderBadResponseError,
     ProviderTimeoutError,
 )
-from stations.services.providers_nominatim import NominatimGeocodingProvider
-from stations.services.providers_osrm import OsrmDirectionsProvider
 from stations.services.providers_tomtom import TomTomDirectionsProvider
+from stations.services.providers_tomtom_search import TomTomSearchProvider
 
 
 class DummyResponse:
@@ -17,153 +16,6 @@ class DummyResponse:
 
     def json(self):
         return self._json_data
-
-
-def test_nominatim_geocode_success(monkeypatch):
-    provider = NominatimGeocodingProvider(timeout=2.0, max_retries=1)
-
-    def fake_get(url, params=None, timeout=None):
-        return DummyResponse(
-            status_code=200,
-            json_data=[
-                {
-                    "lat": "32.7767",
-                    "lon": "-96.7970",
-                    "display_name": "Dallas, Texas, USA",
-                }
-            ],
-        )
-
-    monkeypatch.setattr(httpx, "get", fake_get)
-
-    result = provider.geocode("Dallas, TX")
-
-    assert result["lat"] == 32.7767
-    assert result["lon"] == -96.797
-    assert "Dallas" in result["display_name"]
-
-
-def test_nominatim_geocode_timeout(monkeypatch):
-    provider = NominatimGeocodingProvider(timeout=0.01, max_retries=1)
-
-    def fake_get(url, params=None, timeout=None):
-        raise httpx.TimeoutException("timeout")
-
-    monkeypatch.setattr(httpx, "get", fake_get)
-
-    with pytest.raises(ProviderTimeoutError):
-        provider.geocode("Dallas, TX")
-
-
-def test_nominatim_geocode_bad_response(monkeypatch):
-    provider = NominatimGeocodingProvider(timeout=2.0, max_retries=1)
-
-    def fake_get(url, params=None, timeout=None):
-        return DummyResponse(status_code=500, json_data={"error": "server error"})
-
-    monkeypatch.setattr(httpx, "get", fake_get)
-
-    with pytest.raises(ProviderBadResponseError):
-        provider.geocode("Dallas, TX")
-
-
-def test_osrm_route_success(monkeypatch):
-    provider = OsrmDirectionsProvider(timeout=2.0, max_retries=1)
-
-    def fake_get(url, params=None, timeout=None):
-        return DummyResponse(
-            status_code=200,
-            json_data={
-                "code": "Ok",
-                "routes": [
-                    {
-                        "distance": 120000.0,
-                        "duration": 5400.0,
-                        "geometry": "abc123",
-                    }
-                ],
-            },
-        )
-
-    monkeypatch.setattr(httpx, "get", fake_get)
-
-    origin = {"lat": 32.7767, "lon": -96.7970}
-    destination = {"lat": 29.7604, "lon": -95.3698}
-    result = provider.route(origin, destination)
-
-    assert result["distance_m"] == 120000.0
-    assert result["duration_s"] == 5400.0
-    assert result["geometry"] == "abc123"
-
-
-def test_osrm_route_timeout(monkeypatch):
-    provider = OsrmDirectionsProvider(timeout=0.01, max_retries=1)
-
-    def fake_get(url, params=None, timeout=None):
-        raise httpx.TimeoutException("timeout")
-
-    monkeypatch.setattr(httpx, "get", fake_get)
-
-    origin = {"lat": 32.7767, "lon": -96.7970}
-    destination = {"lat": 29.7604, "lon": -95.3698}
-
-    with pytest.raises(ProviderTimeoutError):
-        provider.route(origin, destination)
-
-
-def test_osrm_route_bad_payload(monkeypatch):
-    provider = OsrmDirectionsProvider(timeout=2.0, max_retries=1)
-
-    def fake_get(url, params=None, timeout=None):
-        return DummyResponse(status_code=200, json_data={"code": "NoRoute", "routes": []})
-
-    monkeypatch.setattr(httpx, "get", fake_get)
-
-    origin = {"lat": 32.7767, "lon": -96.7970}
-    destination = {"lat": 29.7604, "lon": -95.3698}
-
-    with pytest.raises(ProviderBadResponseError):
-        provider.route(origin, destination)
-
-
-def test_osrm_route_includes_alternatives_when_requested(monkeypatch):
-    provider = OsrmDirectionsProvider(timeout=2.0, max_retries=1)
-    observed = {"params": {}}
-
-    def fake_get(url, params=None, timeout=None):
-        observed["params"] = params or {}
-        return DummyResponse(
-            status_code=200,
-            json_data={
-                "code": "Ok",
-                "routes": [
-                    {
-                        "distance": 100000.0,
-                        "duration": 5000.0,
-                        "geometry": {
-                            "coordinates": [[-96.79, 32.77], [-95.36, 29.76]],
-                        },
-                    },
-                    {
-                        "distance": 105000.0,
-                        "duration": 5200.0,
-                        "geometry": {
-                            "coordinates": [[-96.79, 32.77], [-95.9, 30.4], [-95.36, 29.76]],
-                        },
-                    },
-                ],
-            },
-        )
-
-    monkeypatch.setattr(httpx, "get", fake_get)
-
-    origin = {"lat": 32.7767, "lon": -96.7970}
-    destination = {"lat": 29.7604, "lon": -95.3698}
-    result = provider.route(origin, destination, include_alternatives=True)
-
-    assert observed["params"]["alternatives"] == "true"
-    assert len(result["alternatives"]) == 2
-
 
 
 def test_tomtom_route_success(monkeypatch):
@@ -297,3 +149,68 @@ def test_tomtom_route_includes_alternatives_when_requested(monkeypatch):
 
     assert observed["params"]["maxAlternatives"] == "2"
     assert len(result["alternatives"]) == 2
+
+
+def test_tomtom_search_geocode_success(monkeypatch):
+    provider = TomTomSearchProvider(api_key="test-key", timeout=2.0, max_retries=1)
+
+    def fake_get(url, params=None, timeout=None):
+        return DummyResponse(
+            status_code=200,
+            json_data={
+                "results": [
+                    {
+                        "position": {"lat": 47.6062, "lon": -122.3321},
+                        "address": {"freeformAddress": "Seattle, WA, United States"},
+                    }
+                ]
+            },
+        )
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    result = provider.geocode("Seattle, WA")
+
+    assert result["lat"] == pytest.approx(47.6062)
+    assert result["lon"] == pytest.approx(-122.3321)
+    assert "Seattle" in result["display_name"]
+
+
+def test_tomtom_search_suggest_success(monkeypatch):
+    provider = TomTomSearchProvider(api_key="test-key", timeout=2.0, max_retries=1)
+
+    def fake_get(url, params=None, timeout=None):
+        return DummyResponse(
+            status_code=200,
+            json_data={
+                "results": [
+                    {
+                        "position": {"lat": 42.3601, "lon": -71.0589},
+                        "address": {"freeformAddress": "Boston, MA, United States"},
+                    },
+                    {
+                        "position": {"lat": 42.3314, "lon": -71.0200},
+                        "address": {"freeformAddress": "South Boston, MA, United States"},
+                    },
+                ]
+            },
+        )
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    results = provider.suggest("Boston", limit=6)
+
+    assert len(results) == 2
+    assert results[0]["name"].startswith("Boston")
+
+
+def test_tomtom_search_timeout(monkeypatch):
+    provider = TomTomSearchProvider(api_key="test-key", timeout=0.01, max_retries=1)
+
+    def fake_get(url, params=None, timeout=None):
+        raise httpx.TimeoutException("timeout")
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+
+    with pytest.raises(ProviderTimeoutError):
+        provider.suggest("Boston", limit=5)

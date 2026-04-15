@@ -13,7 +13,7 @@ def disable_station_geocoding_attempts(monkeypatch):
     monkeypatch.setattr(views, "build_direct_route_alternatives", lambda *args, **kwargs: [])
     monkeypatch.setattr(
         views,
-        "build_osrm_geometry_path",
+        "build_route_geometry_path",
         lambda origin_coords, destination_coords, waypoints: views.build_path_with_waypoints(
             origin_coords,
             destination_coords,
@@ -308,13 +308,13 @@ def test_optimize_route_no_refuel_returns_direct_alternatives(client, monkeypatc
 
 
 @pytest.mark.django_db
-def test_optimize_route_retries_osrm_before_fallback(client, monkeypatch):
+def test_optimize_route_retries_tomtom_before_success(client, monkeypatch):
     create_station_price(retail_price=3.000)
-    calls = {"primary": 0, "retry": 0, "fallback": 0}
+    calls = {"primary": 0, "retry": 0}
 
     def fail_primary(origin, destination, waypoints=None):
         calls["primary"] += 1
-        raise ProviderTimeoutError("OSRM request timed out")
+        raise ProviderTimeoutError("TomTom request timed out")
 
     def succeed_retry(origin, destination, waypoints=None):
         calls["retry"] += 1
@@ -324,13 +324,8 @@ def test_optimize_route_retries_osrm_before_fallback(client, monkeypatch):
             "geometry": "retry-geometry",
         }
 
-    def fail_fallback(*args, **kwargs):
-        calls["fallback"] += 1
-        raise AssertionError("fallback should not run when retry succeeds")
-
     monkeypatch.setattr(views.DIRECTIONS, "route", fail_primary)
     monkeypatch.setattr(views.DIRECTIONS_RETRY, "route", succeed_retry)
-    monkeypatch.setattr(views, "optimize_without_osrm", fail_fallback)
 
     response = client.get(reverse("stations-optimize"), optimize_query())
 
@@ -341,64 +336,28 @@ def test_optimize_route_retries_osrm_before_fallback(client, monkeypatch):
     assert payload["fuel_cost"] == pytest.approx(12.0)
     assert calls["primary"] >= 1
     assert calls["retry"] >= 1
-    assert calls["fallback"] == 0
 
 
 @pytest.mark.django_db
-def test_optimize_route_uses_fallback_after_retry_failure(client, monkeypatch):
+def test_optimize_route_returns_503_after_retry_failure(client, monkeypatch):
     create_station_price(retail_price=3.000)
 
     def fail_primary(origin, destination, waypoints=None):
-        raise ProviderTimeoutError("OSRM request timed out")
+        raise ProviderTimeoutError("TomTom request timed out")
 
     def fail_retry(origin, destination, waypoints=None):
-        raise ProviderTimeoutError("OSRM request timed out")
-
-    fallback_call = {"vehicle_mpg": None}
-
-    def fake_fallback(origin_coords, destination_coords, candidates, weights, vehicle_mpg):
-        fallback_call["vehicle_mpg"] = vehicle_mpg
-        station = candidates[0]
-        distance_m = 321868.8
-        distance_miles = distance_m / 1609.344
-        fuel_cost = (distance_miles / vehicle_mpg) * float(station["retail_price"])
-
-        alternative = {
-            "station": station,
-            "distance_m": distance_m,
-            "duration_s": 15000.0,
-            "geometry": "",
-            "estimated_fuel_cost": fuel_cost,
-            "time_norm": 0.0,
-            "price_norm": 0.0,
-            "score": 0.0,
-        }
-
-        return {
-            "origin": origin_coords,
-            "destination": destination_coords,
-            "best_option": alternative,
-            "alternatives": [alternative],
-            "weights": weights,
-            "engine": "fallback_estimate",
-        }
+        raise ProviderTimeoutError("TomTom request timed out")
 
     monkeypatch.setattr(views.DIRECTIONS, "route", fail_primary)
     monkeypatch.setattr(views.DIRECTIONS_RETRY, "route", fail_retry)
-    monkeypatch.setattr(views, "optimize_without_osrm", fake_fallback)
 
     response = client.get(
         reverse("stations-optimize"),
         optimize_query(avg_mpg="40", tank_capacity_gal="18"),
     )
 
-    assert response.status_code == 200
-    payload = response.json()
-
-    assert fallback_call["vehicle_mpg"] == pytest.approx(40.0)
-    assert payload["engine"] == "fallback_estimate"
-    assert payload["assumptions"]["avg_mpg"] == pytest.approx(40.0)
-    assert payload["assumptions"]["tank_capacity_gal"] == pytest.approx(18.0)
+    assert response.status_code == 503
+    assert "TomTom routing is unavailable" in response.json()["error"]
 
 
 @pytest.mark.django_db

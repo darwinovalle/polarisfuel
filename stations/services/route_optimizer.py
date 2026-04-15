@@ -3,6 +3,8 @@ from __future__ import annotations
 import heapq
 from typing import Any
 
+from stations.services.provider_errors import ProviderUnavailableError
+
 
 class RouteOptimizer:
     def __init__(
@@ -55,7 +57,11 @@ class RouteOptimizer:
                 "lon": station["lon"],
             }
 
-            route_data = self.directions_provider.route(origin, destination, waypoints=[waypoint])
+            try:
+                route_data = self.directions_provider.route(origin, destination, waypoints=[waypoint])
+            except Exception:
+                # Skip unroutable candidate stops and keep evaluating the rest.
+                continue
 
             distance_m = float(route_data["distance_m"])
             duration_s = float(route_data["duration_s"])
@@ -71,6 +77,9 @@ class RouteOptimizer:
                     "estimated_fuel_cost": estimated_fuel_cost,
                 }
             )
+
+        if not alternatives:
+            raise ProviderUnavailableError("No routable station alternatives available")
 
         self._apply_scores(alternatives, weights)
         alternatives.sort(key=lambda x: x["score"])

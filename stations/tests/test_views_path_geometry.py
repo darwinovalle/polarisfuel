@@ -29,7 +29,7 @@ class FullRouteFailsProvider:
         }
 
 
-def test_build_osrm_geometry_path_stitches_segment_routes(monkeypatch):
+def test_build_route_geometry_path_stitches_segment_routes(monkeypatch):
     provider = FullRouteFailsProvider()
 
     monkeypatch.setattr(views, "PATH_DIRECTIONS", provider)
@@ -42,7 +42,7 @@ def test_build_osrm_geometry_path_stitches_segment_routes(monkeypatch):
         {"lat": 16.0, "lng": -94.0},
     ]
 
-    path = views.build_osrm_geometry_path(origin, destination, waypoints)
+    path = views.build_route_geometry_path(origin, destination, waypoints)
 
     # Should not fall back to straight-line [origin, waypoints..., destination].
     assert len(path) > (len(waypoints) + 2)
@@ -57,7 +57,7 @@ def test_build_alternative_refuel_previews_builds_distinct_option_paths(monkeypa
         path.append([float(destination_coords["lat"]), float(destination_coords["lon"])])
         return path
 
-    monkeypatch.setattr(views, "build_osrm_geometry_path", fake_path_builder)
+    monkeypatch.setattr(views, "build_route_geometry_path", fake_path_builder)
 
     alternatives = [
         {

@@ -1,5 +1,6 @@
 import pytest
 
+from stations.services.provider_errors import ProviderUnavailableError
 from stations.services.route_optimizer import RouteOptimizer
 
 
@@ -40,6 +41,27 @@ class FakeDirectionsProvider:
         raise ValueError("Unknown station id")
 
 
+class PartiallyFailingDirectionsProvider:
+    def route(self, origin: dict, destination: dict, waypoints=None) -> dict:
+        waypoints = waypoints or []
+        stop = (waypoints or [{}])[0]
+        station_id = stop.get("id")
+
+        if station_id == "A":
+            raise RuntimeError("unroutable waypoint")
+        if station_id == "B":
+            return {"distance_m": 2520000.0, "duration_s": 101000.0, "geometry": "route-B"}
+        if station_id == "C":
+            return {"distance_m": 2600000.0, "duration_s": 106000.0, "geometry": "route-C"}
+
+        raise RuntimeError("unknown station")
+
+
+class AlwaysFailingDirectionsProvider:
+    def route(self, origin: dict, destination: dict, waypoints=None) -> dict:
+        raise RuntimeError("provider down")
+
+
 @pytest.fixture
 def candidate_stations():
     return [
@@ -53,6 +75,14 @@ def build_optimizer():
     return RouteOptimizer(
         geocoding_provider=FakeGeocodingProvider(),
         directions_provider=FakeDirectionsProvider(),
+        vehicle_km_per_liter=3.0,
+    )
+
+
+def build_optimizer_with_provider(provider):
+    return RouteOptimizer(
+        geocoding_provider=FakeGeocodingProvider(),
+        directions_provider=provider,
         vehicle_km_per_liter=3.0,
     )
 
@@ -190,3 +220,32 @@ def test_optimize_exposes_dijkstra_path(candidate_stations):
     assert "best_path" in result
     assert result["best_path"][0] == "START"
     assert result["best_path"][-1] == "END"
+
+
+@pytest.mark.django_db
+def test_optimize_skips_unroutable_candidates(candidate_stations):
+    optimizer = build_optimizer_with_provider(PartiallyFailingDirectionsProvider())
+
+    result = optimizer.optimize(
+        origin_query="Dallas, TX",
+        destination_query="New York, NY",
+        candidate_stations=candidate_stations,
+        weights={"time": 0.6, "price": 0.4},
+    )
+
+    ids = [item["station"]["id"] for item in result["alternatives"]]
+    assert "A" not in ids
+    assert len(ids) == 2
+
+
+@pytest.mark.django_db
+def test_optimize_raises_when_all_candidates_unroutable(candidate_stations):
+    optimizer = build_optimizer_with_provider(AlwaysFailingDirectionsProvider())
+
+    with pytest.raises(ProviderUnavailableError, match="No routable station alternatives available"):
+        optimizer.optimize(
+            origin_query="Dallas, TX",
+            destination_query="New York, NY",
+            candidate_stations=candidate_stations,
+            weights={"time": 0.6, "price": 0.4},
+        )
