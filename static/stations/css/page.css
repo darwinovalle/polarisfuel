@@ -58,19 +58,15 @@ body {
 .brand-icon {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
-  background: #fff;
-  color: #000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
-.brand h1 {
-  margin: 0;
-  font-size: 20px;
-  letter-spacing: -0.02em;
+.brand-logo {
+  height: 26px;
+  width: auto;
+  max-width: 230px;
+  object-fit: contain;
 }
 
 .subtitle {
