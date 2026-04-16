@@ -230,6 +230,9 @@ def build_synthetic_candidates(price_rows, origin_coords: dict, destination_coor
         existing_ids=existing_ids,
         state_centroids=STATE_CENTROIDS,
         max_candidates=MAX_CANDIDATES,
+        min_route_corridor_m=MIN_ROUTE_CORRIDOR_M,
+        max_route_corridor_m=MAX_ROUTE_CORRIDOR_M,
+        haversine_distance_m_fn=haversine_distance_m,
         project_progress_ratio_fn=project_progress_ratio,
         distance_point_to_segment_m_fn=distance_point_to_segment_m,
     )
@@ -322,6 +325,91 @@ def build_direct_route_alternatives(
         max_options=max_options,
         default_vehicle_mpg=DEFAULT_VEHICLE_MPG,
     )
+
+
+def build_direct_route_snapshot(origin_coords: dict, destination_coords: dict):
+    origin = {
+        "lat": float(origin_coords["lat"]),
+        "lon": float(origin_coords["lon"]),
+    }
+    destination = {
+        "lat": float(destination_coords["lat"]),
+        "lon": float(destination_coords["lon"]),
+    }
+
+    for provider in (DIRECTIONS, DIRECTIONS_RETRY, PATH_DIRECTIONS, PATH_DIRECTIONS_RETRY):
+        if provider is None:
+            continue
+        try:
+            route_data = provider.route(origin, destination, waypoints=[])
+        except Exception:
+            continue
+
+        try:
+            distance_m = float(route_data["distance_m"])
+            duration_s = float(route_data["duration_s"])
+        except (KeyError, TypeError, ValueError):
+            continue
+
+        return {
+            "distance_m": distance_m,
+            "duration_s": duration_s,
+            "geometry": _normalize_geometry_points(route_data.get("geometry", [])),
+        }
+
+    return None
+
+
+def align_estimated_waypoints_to_route_geometry(waypoints: list, route_geometry: list):
+    if not waypoints or not isinstance(route_geometry, list) or len(route_geometry) < 2:
+        return waypoints
+
+    cumulative_distances = [0.0]
+    for idx in range(1, len(route_geometry)):
+        previous = route_geometry[idx - 1]
+        current = route_geometry[idx]
+        if (
+            not isinstance(previous, (list, tuple))
+            or not isinstance(current, (list, tuple))
+            or len(previous) < 2
+            or len(current) < 2
+        ):
+            cumulative_distances.append(cumulative_distances[-1])
+            continue
+
+        segment_m = haversine_distance_m(
+            float(previous[0]),
+            float(previous[1]),
+            float(current[0]),
+            float(current[1]),
+        )
+        cumulative_distances.append(cumulative_distances[-1] + segment_m)
+
+    total_distance_m = cumulative_distances[-1]
+    if total_distance_m <= 0:
+        return waypoints
+
+    aligned = []
+    for stop in waypoints:
+        if not stop.get("is_estimated"):
+            aligned.append(stop)
+            continue
+
+        progress_ratio = min(1.0, max(0.0, float(stop.get("progress_ratio", 0.0))))
+        target_distance_m = total_distance_m * progress_ratio
+
+        best_index = min(
+            range(len(cumulative_distances)),
+            key=lambda idx: abs(cumulative_distances[idx] - target_distance_m),
+        )
+
+        snapped_point = route_geometry[best_index]
+        snapped_stop = dict(stop)
+        snapped_stop["lat"] = float(snapped_point[0])
+        snapped_stop["lng"] = float(snapped_point[1])
+        aligned.append(snapped_stop)
+
+    return aligned
 
 
 def build_fuel_plan(
@@ -539,6 +627,9 @@ def optimize_route(request):
         )
 
     station_pool = build_progress_spread_candidates(candidates, MAX_STATION_POOL_SIZE)
+    real_station_pool_count = sum(1 for item in station_pool if not item.get("synthetic"))
+    synthetic_station_pool_count = len(station_pool) - real_station_pool_count
+
     optimizer_candidates = sorted(
         station_pool,
         key=lambda item: (
@@ -594,8 +685,27 @@ def optimize_route(request):
     best = result["best_option"]
     alternatives = result["alternatives"][:MAX_CANDIDATES]
 
+    direct_route_snapshot = build_direct_route_snapshot(
+        origin_coords=result["origin"],
+        destination_coords=result["destination"],
+    )
+
+    direct_snapshot_distance_m = None
+    direct_snapshot_duration_s = None
+    if direct_route_snapshot is not None:
+        try:
+            direct_snapshot_distance_m = float(direct_route_snapshot["distance_m"])
+            direct_snapshot_duration_s = float(direct_route_snapshot["duration_s"])
+        except (KeyError, TypeError, ValueError):
+            direct_snapshot_distance_m = None
+            direct_snapshot_duration_s = None
+
+    fuel_distance_m = float(best["distance_m"])
+    if direct_snapshot_distance_m is not None and direct_snapshot_distance_m > 0:
+        fuel_distance_m = min(fuel_distance_m, direct_snapshot_distance_m)
+
     fuel_plan = build_fuel_plan(
-        best["distance_m"],
+        fuel_distance_m,
         mpg=vehicle_mpg,
         tank_capacity_gal=tank_capacity_gal,
         start_fuel_percent=start_fuel_percent,
@@ -613,6 +723,32 @@ def optimize_route(request):
         if direct_alternatives:
             alternatives = direct_alternatives
             best = direct_alternatives[0]
+        elif direct_snapshot_distance_m is not None and direct_snapshot_distance_m > 0:
+            direct_distance_m = direct_snapshot_distance_m
+            direct_duration_s = float(direct_snapshot_duration_s or 0.0)
+            direct_geometry = direct_route_snapshot.get("geometry", [])
+            direct_fuel_cost = ((direct_distance_m / 1609.344) / vehicle_mpg) * reference_fuel_price
+
+            best = {
+                "station": {
+                    "id": "direct-1",
+                    "name": "Direct Route #1",
+                    "address": "No refuel required",
+                    "lat": None,
+                    "lon": None,
+                    "retail_price": reference_fuel_price,
+                    "synthetic": True,
+                },
+                "distance_m": direct_distance_m,
+                "duration_s": direct_duration_s,
+                "geometry": direct_geometry,
+                "estimated_fuel_cost": direct_fuel_cost,
+                "time_norm": 0.0,
+                "price_norm": 0.0,
+                "score": 0.0,
+                "refuel_waypoints": [],
+            }
+            alternatives = [best]
 
         waypoints = []
         path = _normalize_geometry_points(best.get("geometry", []))
@@ -636,6 +772,13 @@ def optimize_route(request):
             initial_reach_ratio=fuel_plan.get("initial_reach_ratio", 1.0),
             max_leg_ratio=max_leg_ratio,
         )
+
+        if direct_route_snapshot is not None:
+            waypoints = align_estimated_waypoints_to_route_geometry(
+                waypoints,
+                direct_route_snapshot.get("geometry", []),
+            )
+
         path = build_route_geometry_path(
             origin_coords=result["origin"],
             destination_coords=result["destination"],
@@ -649,6 +792,76 @@ def optimize_route(request):
                 destination_coords=result["destination"],
                 shared_waypoints=waypoints,
             )
+
+    all_estimated_waypoints = bool(waypoints) and all(stop.get("is_estimated") for stop in waypoints)
+    using_direct_metrics_for_estimated_stops = False
+
+    if all_estimated_waypoints and direct_snapshot_distance_m is not None and direct_snapshot_distance_m > 0:
+        direct_distance_m = direct_snapshot_distance_m
+        direct_duration_s = float(direct_snapshot_duration_s or 0.0)
+        direct_geometry = direct_route_snapshot.get("geometry", [])
+        direct_fuel_cost = ((direct_distance_m / 1609.344) / vehicle_mpg) * reference_fuel_price
+
+        primary_stop = waypoints[0]
+        best = {
+            "station": {
+                "id": primary_stop.get("station_id") or "estimated-direct-1",
+                "name": primary_stop.get("name", "Estimated Fuel Stop 1"),
+                "address": primary_stop.get("address", "Estimated along route (provider fallback)"),
+                "lat": primary_stop.get("lat"),
+                "lon": primary_stop.get("lng"),
+                "retail_price": float(primary_stop.get("retail_price") or reference_fuel_price),
+                "synthetic": True,
+            },
+            "distance_m": direct_distance_m,
+            "duration_s": direct_duration_s,
+            "geometry": direct_geometry,
+            "estimated_fuel_cost": direct_fuel_cost,
+            "time_norm": 0.0,
+            "price_norm": 0.0,
+            "score": 0.0,
+            "refuel_waypoints": waypoints,
+        }
+        alternatives = [best]
+        path = direct_geometry if len(direct_geometry) > 1 else build_path_with_waypoints(
+            result["origin"],
+            result["destination"],
+            [],
+        )
+        using_direct_metrics_for_estimated_stops = True
+
+    estimated_waypoint_count = sum(1 for stop in waypoints if stop.get("is_estimated"))
+    notices = []
+
+    if fuel_plan["min_refuel_stops"] > 0 and real_station_pool_count <= 0:
+        notices.append(
+            "No real fuel stations were found in the local dataset for this route corridor. "
+            "Estimated fallback stop placement was used."
+        )
+
+    if estimated_waypoint_count > 0:
+        if estimated_waypoint_count == len(waypoints):
+            notices.append(
+                "Refuel stop locations are estimated along the route due to limited verified station records."
+            )
+        else:
+            notices.append(
+                "Some refuel stop locations are estimated because verified station records were incomplete."
+            )
+
+    if fuel_plan["min_refuel_stops"] > 0 and waypoints:
+        first_progress = float(waypoints[0].get("progress_ratio", 0.0))
+        initial_reach = float(fuel_plan.get("initial_reach_ratio", 1.0))
+        if first_progress > (initial_reach + 0.03):
+            notices.append(
+                "Nearest reachable stop from current fuel level could not be verified from station data; "
+                "first stop was estimated conservatively."
+            )
+
+    if using_direct_metrics_for_estimated_stops:
+        notices.append(
+            "Distance and duration are based on the direct route because estimated stop coordinates are approximate."
+        )
 
     response = {
         "origin": {
@@ -677,6 +890,14 @@ def optimize_route(request):
             "start_fuel_percent": start_fuel_percent,
         },
         "fuel_plan": fuel_plan,
+        "notices": notices,
+        "data_quality": {
+            "real_station_candidates": real_station_pool_count,
+            "synthetic_station_candidates": synthetic_station_pool_count,
+            "estimated_waypoints": estimated_waypoint_count,
+            "uses_estimated_waypoints": estimated_waypoint_count > 0,
+            "uses_direct_metrics_for_estimated_waypoints": using_direct_metrics_for_estimated_stops,
+        },
     }
 
     return JsonResponse(response)

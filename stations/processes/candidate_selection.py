@@ -370,6 +370,9 @@ def build_synthetic_candidates(
     existing_ids,
     state_centroids: dict,
     max_candidates: int,
+    min_route_corridor_m: float,
+    max_route_corridor_m: float,
+    haversine_distance_m_fn,
     project_progress_ratio_fn,
     distance_point_to_segment_m_fn,
 ):
@@ -379,6 +382,17 @@ def build_synthetic_candidates(
     origin_lon = float(origin_coords["lon"])
     destination_lat = float(destination_coords["lat"])
     destination_lon = float(destination_coords["lon"])
+
+    direct_distance_m = haversine_distance_m_fn(
+        origin_lat,
+        origin_lon,
+        destination_lat,
+        destination_lon,
+    )
+    route_corridor_m = max(
+        min_route_corridor_m,
+        min(max_route_corridor_m, direct_distance_m * 0.18),
+    )
 
     synthetic = []
 
@@ -423,6 +437,12 @@ def build_synthetic_candidates(
             destination_lon=destination_lon,
         )
 
+        if progress_ratio < -0.15 or progress_ratio > 1.15:
+            continue
+
+        if corridor_distance_m > (route_corridor_m * 1.25):
+            continue
+
         synthetic.append(
             {
                 "id": rack_id,
@@ -439,6 +459,40 @@ def build_synthetic_candidates(
 
         if len(synthetic) >= max_candidates:
             break
+
+    # If route-constrained projection produced nothing, place estimated stops directly along the route
+    # to avoid off-corridor cross-country detours.
+    if not synthetic:
+        used_ids = set(existing_ids)
+        slot_index = 0
+
+        for cp in price_rows:
+            rack_id = str(cp.rack_id)
+            if rack_id in used_ids:
+                continue
+
+            slot_index += 1
+            progress_ratio = slot_index / (max_candidates + 1)
+            lat = origin_lat + ((destination_lat - origin_lat) * progress_ratio)
+            lon = origin_lon + ((destination_lon - origin_lon) * progress_ratio)
+
+            synthetic.append(
+                {
+                    "id": rack_id,
+                    "name": f"Estimated Fuel Stop {len(synthetic) + 1}",
+                    "address": "Estimated along route (provider fallback)",
+                    "lat": lat,
+                    "lon": lon,
+                    "retail_price": float(cp.retail_price),
+                    "synthetic": True,
+                    "progress_ratio": progress_ratio,
+                    "corridor_distance_m": 0.0,
+                }
+            )
+            used_ids.add(rack_id)
+
+            if len(synthetic) >= max_candidates:
+                break
 
     return synthetic
 
@@ -527,6 +581,7 @@ def select_refuel_waypoints(
         target_progress = float(target_progresses[stop_index])
         best_station = None
         best_score = None
+        strict_first_leg = stop_index == 0 and clamped_initial_reach < 0.98
 
         previous_progress = float(selected[-1].get("progress_ratio", 0.0)) if selected else 0.0
 
@@ -572,10 +627,10 @@ def select_refuel_waypoints(
 
             if near_leg_limit:
                 candidate_pool = near_leg_limit
-            elif not strict_leg_enforcement:
+            elif not strict_leg_enforcement and not strict_first_leg:
                 candidate_pool = forward_pool
 
-        if not candidate_pool and not strict_leg_enforcement:
+        if not candidate_pool and not strict_leg_enforcement and not strict_first_leg:
             candidate_pool = [
                 station
                 for station in ranked_pool
@@ -618,12 +673,14 @@ def select_refuel_waypoints(
             progress = min(1.0, progress)
             selected.append(
                 {
+                    "station_id": None,
                     "lat": origin_lat + ((destination_lat - origin_lat) * progress),
                     "lng": origin_lon + ((destination_lon - origin_lon) * progress),
                     "name": f"Estimated Fuel Stop {stop_index + 1}",
                     "address": "Estimated along route (provider fallback)",
                     "retail_price": 0.0,
                     "progress_ratio": progress,
+                    "is_estimated": True,
                     "type": f"Refuel Stop {stop_index + 1}",
                 }
             )
@@ -632,12 +689,14 @@ def select_refuel_waypoints(
         used_ids.add(str(best_station["id"]))
         selected.append(
             {
+                "station_id": str(best_station["id"]),
                 "lat": float(best_station["lat"]),
                 "lng": float(best_station["lon"]),
                 "name": best_station["name"],
                 "address": best_station.get("address", ""),
                 "retail_price": float(best_station["retail_price"]),
                 "progress_ratio": float(best_station["progress_ratio"]),
+                "is_estimated": bool(best_station.get("synthetic")),
                 "type": f"Refuel Stop {len(selected) + 1}",
             }
         )
@@ -648,12 +707,14 @@ def select_refuel_waypoints(
         progress = min(1.0, progress)
         selected.append(
             {
+                "station_id": None,
                 "lat": origin_lat + ((destination_lat - origin_lat) * progress),
                 "lng": origin_lon + ((destination_lon - origin_lon) * progress),
                 "name": f"Estimated Fuel Stop {stop_index + 1}",
                 "address": "Estimated along route (provider fallback)",
                 "retail_price": 0.0,
                 "progress_ratio": progress,
+                "is_estimated": True,
                 "type": f"Refuel Stop {stop_index + 1}",
             }
         )

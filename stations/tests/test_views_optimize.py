@@ -308,6 +308,90 @@ def test_optimize_route_no_refuel_returns_direct_alternatives(client, monkeypatc
 
 
 @pytest.mark.django_db
+def test_optimize_route_uses_direct_distance_for_no_refuel_decision(client, monkeypatch):
+    create_station_price(retail_price=3.150)
+
+    def fake_optimize(
+        self,
+        origin_query,
+        destination_query,
+        candidate_stations,
+        weights,
+        origin_coords,
+        destination_coords,
+    ):
+        station = candidate_stations[0]
+        station = {
+            **station,
+            "name": "Estimated Fuel Stop 1",
+            "address": "Estimated along route (provider fallback)",
+            "lat": 31.0895,
+            "lon": -97.6335,
+            "synthetic": True,
+        }
+        alternative = {
+            "station": station,
+            "distance_m": 4327146.0,  # ~2689 miles (detour bug shape)
+            "duration_s": 134460.0,
+            "geometry": [],
+            "estimated_fuel_cost": 268.99,
+            "time_norm": 0.0,
+            "price_norm": 0.0,
+            "score": 0.0,
+        }
+        return {
+            "origin": {
+                "lat": float(origin_coords["lat"]),
+                "lon": float(origin_coords["lon"]),
+                "display_name": origin_query,
+            },
+            "destination": {
+                "lat": float(destination_coords["lat"]),
+                "lon": float(destination_coords["lon"]),
+                "display_name": destination_query,
+            },
+            "best_option": alternative,
+            "alternatives": [alternative],
+            "weights": weights,
+        }
+
+    monkeypatch.setattr(views.RouteOptimizer, "optimize", fake_optimize)
+    monkeypatch.setattr(
+        views,
+        "build_direct_route_snapshot",
+        lambda *args, **kwargs: {
+            "distance_m": 536319.0,  # ~333 miles (Las Vegas -> San Diego direct)
+            "duration_s": 16800.0,
+            "geometry": [[36.1690921, -115.1405767], [32.71576, -117.1638173]],
+        },
+    )
+
+    response = client.get(
+        reverse("stations-optimize"),
+        optimize_query(
+            origin="Las Vegas, NV",
+            destination="San Diego, CA",
+            origin_lat="36.1690921",
+            origin_lon="-115.1405767",
+            destination_lat="32.71576",
+            destination_lon="-117.1638173",
+            avg_mpg="25",
+            tank_capacity_gal="16",
+            start_fuel_percent="100",
+        ),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["fuel_plan"]["min_refuel_stops"] == 0
+    assert payload["waypoints"] == []
+    assert payload["distance_m"] == pytest.approx(536319.0)
+    assert payload["alternatives"][0]["station"]["name"] == "Direct Route #1"
+    assert len(payload["path"]) == 2
+
+
+@pytest.mark.django_db
 def test_optimize_route_retries_tomtom_before_success(client, monkeypatch):
     create_station_price(retail_price=3.000)
     calls = {"primary": 0, "retry": 0}
@@ -452,6 +536,123 @@ def test_optimize_route_uses_estimated_labels_for_synthetic_candidates(client, m
         assert alt["station"]["synthetic"] is True
         assert alt["station"]["name"].startswith("Estimated Fuel Stop")
         assert alt["station"]["address"] == "Estimated along route (provider fallback)"
+
+
+@pytest.mark.django_db
+def test_optimize_route_short_trip_synthetic_stop_stays_on_corridor(client, monkeypatch):
+    create_station_price(
+        retail_price=2.899,
+        opis_truckstop_id=3101,
+        rack_id=31,
+        name="Fallback A",
+        city="Austin",
+        state="TX",
+    )
+    create_station_price(
+        retail_price=2.999,
+        opis_truckstop_id=3102,
+        rack_id=32,
+        name="Fallback B",
+        city="Waco",
+        state="TX",
+    )
+    create_station_price(
+        retail_price=3.099,
+        opis_truckstop_id=3103,
+        rack_id=33,
+        name="Fallback C",
+        city="Temple",
+        state="TX",
+    )
+
+    def fake_optimize(
+        self,
+        origin_query,
+        destination_query,
+        candidate_stations,
+        weights,
+        origin_coords,
+        destination_coords,
+    ):
+        assert candidate_stations
+        # Guardrail: short western route should not build synthetic candidates in Texas longitudes.
+        assert all(float(station["lon"]) < -105.0 for station in candidate_stations)
+
+        first = candidate_stations[0]
+        alternative = {
+            "station": first,
+            "distance_m": 680000.0,
+            "duration_s": 25000.0,
+            "geometry": "",
+            "estimated_fuel_cost": 90.0,
+            "time_norm": 0.0,
+            "price_norm": 0.0,
+            "score": 0.0,
+        }
+        return {
+            "origin": {
+                "lat": float(origin_coords["lat"]),
+                "lon": float(origin_coords["lon"]),
+                "display_name": origin_query,
+            },
+            "destination": {
+                "lat": float(destination_coords["lat"]),
+                "lon": float(destination_coords["lon"]),
+                "display_name": destination_query,
+            },
+            "best_option": alternative,
+            "alternatives": [alternative],
+            "weights": weights,
+        }
+
+    monkeypatch.setattr(views, "build_real_station_candidates", lambda *args, **kwargs: [])
+    monkeypatch.setattr(views, "build_state_corridor_fallback_candidates", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        views,
+        "build_direct_route_snapshot",
+        lambda *args, **kwargs: {
+            "distance_m": 536319.0,
+            "duration_s": 16800.0,
+            "geometry": [[36.1690921, -115.1405767], [32.71576, -117.1638173]],
+        },
+    )
+    monkeypatch.setattr(views.RouteOptimizer, "optimize", fake_optimize)
+
+    response = client.get(
+        reverse("stations-optimize"),
+        optimize_query(
+            origin="Las Vegas, NV",
+            destination="San Diego, CA",
+            origin_lat="36.1690921",
+            origin_lon="-115.1405767",
+            destination_lat="32.71576",
+            destination_lon="-117.1638173",
+            avg_mpg="25",
+            tank_capacity_gal="16",
+            start_fuel_percent="10",
+        ),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["fuel_plan"]["min_refuel_stops"] == 1
+    assert len(payload["waypoints"]) == 1
+    first_waypoint = payload["waypoints"][0]
+    assert float(first_waypoint["lng"]) < -105.0
+    assert first_waypoint["is_estimated"] is True
+    assert float(first_waypoint["progress_ratio"]) <= (
+        float(payload["fuel_plan"]["initial_reach_ratio"]) + 0.03
+    )
+    assert payload["fuel_plan"]["distance_mi"] == pytest.approx(333.2531764495347)
+    assert payload["distance_m"] == pytest.approx(536319.0)
+    assert payload["duration_s"] == pytest.approx(16800.0)
+    assert len(payload["alternatives"]) == 1
+    assert payload["data_quality"]["real_station_candidates"] == 0
+    assert payload["data_quality"]["uses_estimated_waypoints"] is True
+    assert payload["data_quality"]["uses_direct_metrics_for_estimated_waypoints"] is True
+    assert any("No real fuel stations were found" in notice for notice in payload["notices"])
+    assert any("Distance and duration are based on the direct route" in notice for notice in payload["notices"])
 
 
 @pytest.mark.django_db

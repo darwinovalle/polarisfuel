@@ -93,6 +93,23 @@
     return Number.isFinite(numeric) ? numeric : fallback;
   }
 
+  function parseCoordinate(value, min, max) {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return null;
+    }
+
+    if (numeric < min || numeric > max) {
+      return null;
+    }
+
+    return numeric;
+  }
+
   function formatMiles(distanceMeters) {
     const miles = toNumber(distanceMeters) / 1609.344;
     return Math.max(0, Math.round(miles)) + " mi";
@@ -133,9 +150,25 @@
     errorBox.classList.remove("active");
   }
 
-  function renderEngineBadge(engine) {
+  function renderEngineBadge(engine, notices = []) {
+    const messageParts = [];
+
     if (engine === "fallback_estimate") {
-      engineBadge.textContent = "Estimated route: live providers were unavailable, so this result uses fallback calculations.";
+      messageParts.push(
+        "Estimated route: live providers were unavailable, so this result uses fallback calculations.",
+      );
+    }
+
+    if (Array.isArray(notices)) {
+      notices.forEach((notice) => {
+        if (typeof notice === "string" && notice.trim()) {
+          messageParts.push(notice.trim());
+        }
+      });
+    }
+
+    if (messageParts.length > 0) {
+      engineBadge.textContent = messageParts.join(" ");
       engineBadge.classList.add("active");
       return;
     }
@@ -470,9 +503,9 @@
 
   function buildRouteFromAlternative(alternative) {
     const station = alternative.station || {};
-    const stationLat = Number(station.lat);
-    const stationLon = Number(station.lon);
-    const stationHasCoords = Number.isFinite(stationLat) && Number.isFinite(stationLon);
+    const stationLat = parseCoordinate(station.lat, -90, 90);
+    const stationLon = parseCoordinate(station.lon, -180, 180);
+    const stationHasCoords = stationLat !== null && stationLon !== null;
 
     const alternativePath = Array.isArray(alternative.geometry)
       ? alternative.geometry
@@ -481,9 +514,9 @@
               return null;
             }
 
-            const lat = Number(point[0]);
-            const lng = Number(point[1]);
-            if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+            const lat = parseCoordinate(point[0], -90, 90);
+            const lng = parseCoordinate(point[1], -180, 180);
+            if (lat === null || lng === null) {
               return null;
             }
 
@@ -523,27 +556,31 @@
 
     if (shouldUseSharedRefuelPlan) {
       const normalizedSharedWaypoints = sharedWaypoints.map((wp) => {
+        const waypointLat = parseCoordinate(wp.lat, -90, 90);
+        const waypointLng = parseCoordinate(wp.lng, -180, 180);
         return {
-          lat: toNumber(wp.lat),
-          lng: toNumber(wp.lng),
+          lat: waypointLat,
+          lng: waypointLng,
           name: wp.name || "Fuel Stop",
           address: wp.address || "",
           type: wp.type || "Refuel Stop",
         };
-      }).filter((wp) => Number.isFinite(wp.lat) && Number.isFinite(wp.lng));
+      }).filter((wp) => wp.lat !== null && wp.lng !== null);
 
       const normalizedAlternativeWaypoints = Array.isArray(alternative.refuel_waypoints)
         ? alternative.refuel_waypoints
             .map((wp) => {
+              const waypointLat = parseCoordinate(wp.lat, -90, 90);
+              const waypointLng = parseCoordinate(wp.lng, -180, 180);
               return {
-                lat: toNumber(wp.lat),
-                lng: toNumber(wp.lng),
+                lat: waypointLat,
+                lng: waypointLng,
                 name: wp.name || "Fuel Stop",
                 address: wp.address || "",
                 type: wp.type || "Refuel Stop",
               };
             })
-            .filter((wp) => Number.isFinite(wp.lat) && Number.isFinite(wp.lng))
+            .filter((wp) => wp.lat !== null && wp.lng !== null)
         : [];
 
       route.waypoints = normalizedAlternativeWaypoints.length > 0
@@ -652,7 +689,7 @@
 
   function applyOptimizePayload(payload) {
     currentPayload = payload;
-    renderEngineBadge(payload.engine);
+    renderEngineBadge(payload.engine, payload.notices || []);
     currentAlternatives = (payload.alternatives || []).filter((item) => {
       if (!item || !item.station) {
         return false;
@@ -703,7 +740,7 @@
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     clearError();
-    renderEngineBadge("");
+    renderEngineBadge("", []);
     hideSuggestionBox(originSuggestions);
     hideSuggestionBox(destinationSuggestions);
 
