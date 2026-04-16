@@ -44,6 +44,9 @@
   const alternativesBox = document.getElementById("alternativesBox");
   const alternativesList = document.getElementById("alternativesList");
   const searchBtn = document.getElementById("searchBtn");
+  const searchBtnLabel = document.getElementById("searchBtnLabel");
+  const requestLoaderBackdrop = document.getElementById("requestLoaderBackdrop");
+  const requestLoaderModal = document.getElementById("requestLoaderModal");
   const errorBox = document.getElementById("errorBox");
   const engineBadge = document.getElementById("engineBadge");
 
@@ -143,7 +146,39 @@
 
   function setSearching(isSearching) {
     searchBtn.disabled = isSearching;
-    searchBtn.textContent = isSearching ? "Calculating..." : "Find Route";
+    if (searchBtnLabel) {
+      searchBtnLabel.textContent = isSearching ? "Calculating..." : "Find Route";
+    }
+
+    if (!requestLoaderBackdrop || !requestLoaderModal) {
+      return;
+    }
+
+    if (isSearching) {
+      requestLoaderBackdrop.hidden = false;
+      requestLoaderModal.hidden = false;
+
+      window.requestAnimationFrame(() => {
+        requestLoaderBackdrop.classList.add("is-visible");
+        requestLoaderModal.classList.add("is-open");
+      });
+
+      requestLoaderModal.setAttribute("aria-hidden", "false");
+      document.body.classList.add("request-loader-open");
+      return;
+    }
+
+    requestLoaderBackdrop.classList.remove("is-visible");
+    requestLoaderModal.classList.remove("is-open");
+    requestLoaderModal.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("request-loader-open");
+
+    window.setTimeout(() => {
+      if (!requestLoaderModal.classList.contains("is-open")) {
+        requestLoaderBackdrop.hidden = true;
+        requestLoaderModal.hidden = true;
+      }
+    }, 220);
   }
 
   function updateWeightLabels() {

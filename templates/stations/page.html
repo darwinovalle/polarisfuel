@@ -5,12 +5,94 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pathfinder - Route Optimizer</title>
+  <link rel="icon" type="image/png" href="{% static 'stations/images/white_polaris_icon.png' %}?v=1" />
 
   <link rel="stylesheet" href="{% static 'stations/vendor/leaflet/leaflet.css' %}" />
   <link rel="stylesheet" href="{% static 'stations/css/page.css' %}" />
   <link rel="stylesheet" href="{% static 'stations/css/help-sidebar.css' %}" />
+  <link rel="stylesheet" href="{% static 'stations/css/intro-modal.css' %}" />
 </head>
 <body data-optimize-url="{% url 'stations-optimize' %}" data-suggest-url="{% url 'stations-suggest' %}">
+  <div id="introModalBackdrop" class="intro-modal-backdrop" hidden></div>
+
+  <section id="introModal" class="intro-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="introModalTitle" hidden>
+    <header class="intro-modal-header">
+      <div>
+        <p class="intro-modal-kicker">Portfolio MVP Notice</p>
+        <h1 id="introModalTitle" class="intro-modal-title">Welcome to polarisfuel</h1>
+      </div>
+      <button id="introModalClose" class="intro-modal-close" type="button" aria-label="Close welcome modal">X</button>
+    </header>
+
+    <div class="intro-modal-content">
+      <p class="intro-modal-lead">
+        This project is a personal portfolio MVP that reproduces responsibilities from a previous role. 
+      </p>
+
+      <div class="intro-modal-pill-row" aria-label="Project technology stack">
+        <span class="intro-modal-pill">Django</span>
+        <span class="intro-modal-pill">Python</span>
+        <span class="intro-modal-pill">JavaScript</span>
+        <span class="intro-modal-pill">Leaflet</span>
+        <span class="intro-modal-pill">TomTom APIs</span>
+      </div>
+
+      <div class="intro-modal-grid">
+        <article class="intro-modal-card">
+          <h3>What This Demonstrates</h3>
+          <p>
+            The app showcases backend-oriented problem solving: route optimization logic, algorithmic tradeoffs, data handling, and service orchestration for fuel-stop decisions.
+          </p>
+        </article>
+
+        <article class="intro-modal-card">
+          <h3>Live Provider Behavior</h3>
+          <p>
+            Route and location results come from TomTom API requests. The project currently runs using TomTom free-trial quota and request limits.
+          </p>
+        </article>
+      </div>
+
+      <div class="intro-modal-warning" role="note">
+        Fuel station pricing and details in this demo are not guaranteed to be current and should not be treated as a primary source for travel planning.
+      </div>
+    </div>
+
+    <footer class="intro-modal-footer">
+      <p class="intro-modal-contact">
+        Questions or collaboration: <a href="mailto:darwin-ovalle@hotmail.com">darwin-ovalle@hotmail.com</a>
+      </p>
+      <button id="introModalContinue" class="intro-modal-continue" type="button">Continue To App</button>
+    </footer>
+  </section>
+
+  <div id="requestLoaderBackdrop" class="request-loader-backdrop" hidden></div>
+
+  <section
+    id="requestLoaderModal"
+    class="request-loader-modal"
+    role="status"
+    aria-live="polite"
+    aria-label="Calculating optimized route"
+    aria-hidden="true"
+    hidden
+  >
+    <div class="request-loader-ripple" aria-hidden="true">
+      <svg width="76" height="76" viewBox="0 0 44 44">
+        <circle cx="22" cy="22" r="6" fill="none" stroke="#FFFFFF" stroke-width="2">
+          <animate attributeName="r" from="6" to="20" dur="1.5s" begin="0s" repeatCount="indefinite"></animate>
+          <animate attributeName="opacity" from="1" to="0" dur="1.5s" begin="0s" repeatCount="indefinite"></animate>
+        </circle>
+        <circle cx="22" cy="22" r="6" fill="none" stroke="#FFFFFF" stroke-width="2">
+          <animate attributeName="r" from="6" to="20" dur="1.5s" begin="0.5s" repeatCount="indefinite"></animate>
+          <animate attributeName="opacity" from="1" to="0" dur="1.5s" begin="0.5s" repeatCount="indefinite"></animate>
+        </circle>
+      </svg>
+    </div>
+    <h2 class="request-loader-title">Optimizing route...</h2>
+    <p class="request-loader-subtitle">Fetching paths and fuel-stop options from live provider data.</p>
+  </section>
+
   <div class="app">
     <aside class="panel">
       <div class="panel-header">
@@ -62,7 +144,7 @@
           </div>
         </div>
 
-        <button id="searchBtn" class="search-btn" type="submit">Find Route</button>
+        <button id="searchBtn" class="search-btn" type="submit"><span id="searchBtnLabel">Find Route</span></button>
         <div id="errorBox" class="error-msg"></div>
         <div id="engineBadge" class="engine-badge"></div>
 
@@ -74,7 +156,7 @@
 
       <div class="results">
         <div id="emptyState" class="empty-state">
-          <div class="empty-icon">📍</div>
+          <img class="empty-state-pin" src="{% static 'stations/images/location-pin.svg' %}" alt="Location pin" />
           <div>Enter origin and destination to calculate the route.</div>
         </div>
 
@@ -220,5 +302,6 @@
   <script src="{% static 'stations/vendor/leaflet/leaflet.js' %}"></script>
   <script src="{% static 'stations/js/page.js' %}"></script>
   <script src="{% static 'stations/js/help-sidebar.js' %}"></script>
+  <script src="{% static 'stations/js/intro-modal.js' %}"></script>
 </body>
 </html>
