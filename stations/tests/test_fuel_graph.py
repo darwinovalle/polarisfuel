@@ -1,5 +1,6 @@
 import pytest
 
+from stations.processes.fuel import calculate_route_fuel_cost
 from stations.services.fuel_graph import (
     FuelState,
     RouteNode,
@@ -211,3 +212,17 @@ def test_search_feasibility_changes_with_starting_fuel():
 
     assert low_start == []
     assert len(high_start) == 1
+
+
+def test_route_fuel_cost_uses_shared_vehicle_metrics():
+    metrics, cost = calculate_route_fuel_cost(
+        distance_m=160934.4,
+        mpg=20.0,
+        fuel_price=3.50,
+        tank_capacity_gal=16.0,
+        start_fuel_percent=50.0,
+    )
+
+    assert metrics["fuel_consumed_gal"] == pytest.approx(5.0)
+    assert metrics["fuel_purchased_gal"] == pytest.approx(0.0)
+    assert cost == pytest.approx(17.50)

@@ -1,6 +1,6 @@
 
 
-from stations.processes.fuel import calculate_fuel_metrics
+from stations.processes.fuel import calculate_route_fuel_cost
 
 
 def build_path_with_waypoints(origin_coords: dict, destination_coords: dict, waypoints: list):
@@ -265,19 +265,20 @@ def build_direct_route_alternatives(
             if len(geometry) <= 1:
                 geometry = build_path_with_waypoints_fn(origin_coords, destination_coords, [])
 
-            fuel_cost = ((distance_m / 1609.344) / safe_mpg) * safe_price
+            fuel_plan, fuel_cost = calculate_route_fuel_cost(
+                distance_m=distance_m,
+                mpg=safe_mpg,
+                fuel_price=safe_price,
+                tank_capacity_gal=tank_capacity_gal,
+                start_fuel_percent=start_fuel_percent,
+            )
             parsed.append(
                 {
                     "distance_m": distance_m,
                     "duration_s": duration_s,
                     "geometry": geometry,
                     "estimated_fuel_cost": fuel_cost,
-                    "fuel_plan": calculate_fuel_metrics(
-                        distance_m=distance_m,
-                        mpg=safe_mpg,
-                        tank_capacity_gal=tank_capacity_gal,
-                        start_fuel_percent=start_fuel_percent,
-                    ),
+                    "fuel_plan": fuel_plan,
                 }
             )
 

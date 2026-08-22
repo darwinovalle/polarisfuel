@@ -16,7 +16,7 @@ checked, validated, and committed before the next feature starts.
 
 - [x] Fix direct-route alternatives so Time Weight and Price Weight both affect
   their ranking.
-- [ ] Make vehicle MPG, tank capacity, and starting fuel participate in one
+- [x] Make vehicle MPG, tank capacity, and starting fuel participate in one
   consistent route-cost model.
 - [x] Attach shared fuel metrics to station and direct route alternatives as a
   foundation for complete fuel-aware scoring.
@@ -105,6 +105,11 @@ The response now identifies when complete fuel-aware graph search is active and
 warns that unavailable provider legs are excluded. Existing notices continue to
 identify estimated stops, synthetic station data, and direct-route metric
 fallbacks.
+
+Legacy direct and station alternatives now use the same shared fuel-metrics
+cost helper as the graph model. MPG and route distance determine fuel consumed,
+while tank capacity and starting fuel remain available in the returned fuel
+metrics and feasibility calculations.
 
 ## Checkpoint workflow
 

@@ -68,6 +68,25 @@ def calculate_fuel_metrics(
     }
 
 
+def calculate_route_fuel_cost(
+    distance_m: float,
+    mpg: float,
+    fuel_price: float,
+    tank_capacity_gal: float,
+    start_fuel_percent: float,
+) -> tuple[dict, float]:
+    if fuel_price < 0:
+        raise ValueError("fuel price cannot be negative")
+
+    metrics = calculate_fuel_metrics(
+        distance_m=distance_m,
+        mpg=mpg,
+        tank_capacity_gal=tank_capacity_gal,
+        start_fuel_percent=start_fuel_percent,
+    )
+    return metrics, metrics["fuel_consumed_gal"] * float(fuel_price)
+
+
 def parse_positive_float_param(raw_value, field_name: str, default_value: float) -> float:
     value = (raw_value or "").strip()
     if value == "":

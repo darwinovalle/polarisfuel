@@ -3,7 +3,7 @@ from __future__ import annotations
 import heapq
 from typing import Any
 
-from stations.processes.fuel import calculate_fuel_metrics
+from stations.processes.fuel import calculate_route_fuel_cost
 from stations.services.fuel_graph import (
     FuelState,
     RouteEdge,
@@ -78,10 +78,10 @@ class RouteOptimizer:
             distance_m = float(route_data["distance_m"])
             duration_s = float(route_data["duration_s"])
             station_price = float(station["retail_price"])
-            estimated_fuel_cost = self._estimate_fuel_cost(distance_m, station_price)
-            fuel_metrics = calculate_fuel_metrics(
+            fuel_metrics, estimated_fuel_cost = calculate_route_fuel_cost(
                 distance_m=distance_m,
                 mpg=self.vehicle_miles_per_gallon,
+                fuel_price=station_price,
                 tank_capacity_gal=self.tank_capacity_gal,
                 start_fuel_percent=self.start_fuel_percent,
             )
@@ -251,12 +251,6 @@ class RouteOptimizer:
             "lon": lon,
             "display_name": value.get("display_name", default_name),
         }
-
-    def _estimate_fuel_cost(self, distance_m: float, retail_price: float) -> float:
-        # Retail price is USD per gallon, so use miles and MPG.
-        distance_miles = distance_m / 1609.344
-        gallons_needed = distance_miles / self.vehicle_miles_per_gallon
-        return gallons_needed * retail_price
 
     def _apply_scores(
         self,
