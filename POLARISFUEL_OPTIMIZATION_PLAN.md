@@ -76,7 +76,7 @@ omitted so the remaining graph can still produce a valid plan.
 
 - [x] Compare direct and fuel-stop plans using the same scoring model.
 - [x] Return total cost, duration, stops, gallons purchased, and detour details.
-- [ ] Add deterministic tests covering Time Weight, Price Weight, MPG, tank
+- [x] Add deterministic tests covering Time Weight, Price Weight, MPG, tank
   capacity, and starting fuel.
 - [ ] Document known provider/data limitations in the UI response notices.
 
@@ -96,6 +96,10 @@ plans instead of replacing them with the legacy direct-route preview.
 Complete graph responses now expose the selected plan's station sequence,
 purchase records, consumed and purchased gallons, stop count, route duration,
 distance, fuel cost, and accumulated detour.
+
+Deterministic graph tests now demonstrate that MPG, tank capacity, and starting
+fuel alter route feasibility; existing optimizer tests cover Time Weight and
+Price Weight ranking sensitivity.
 
 ## Checkpoint workflow
 

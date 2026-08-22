@@ -143,3 +143,71 @@ def test_search_feasible_route_plans_tracks_station_purchase():
     assert cheap_plan.fuel_purchases[0]["station_id"] == "cheap"
     assert cheap_plan.fuel_purchases[0]["gallons"] == pytest.approx(14.0)
     assert cheap_plan.fuel_cost == pytest.approx(42.0)
+
+
+def test_search_feasibility_changes_with_mpg():
+    nodes = build_route_graph_nodes(
+        origin={"lat": 0.0, "lon": 0.0},
+        destination={"lat": 0.0, "lon": 1.0},
+        stations=[],
+    )
+    edge = build_route_edge(nodes["START"], nodes["END"], 80467.2, 100.0, mpg=10.0)
+
+    efficient = search_feasible_route_plans(
+        nodes, [edge], FuelState(remaining_gal=8.0, capacity_gal=8.0)
+    )
+    inefficient_edge = build_route_edge(
+        nodes["START"], nodes["END"], 80467.2, 100.0, mpg=5.0
+    )
+    inefficient = search_feasible_route_plans(
+        nodes,
+        [inefficient_edge],
+        FuelState(remaining_gal=8.0, capacity_gal=8.0),
+    )
+
+    assert len(efficient) == 1
+    assert inefficient == []
+
+
+def test_search_feasibility_changes_with_tank_capacity():
+    nodes = build_route_graph_nodes(
+        origin={"lat": 0.0, "lon": 0.0},
+        destination={"lat": 0.0, "lon": 2.0},
+        stations=[{"id": "A", "lat": 0.0, "lon": 1.0, "retail_price": 3.0}],
+    )
+    edges = [
+        build_route_edge(nodes["START"], nodes["A"], 96560.64, 100.0, mpg=10.0),
+        build_route_edge(nodes["A"], nodes["END"], 177027.84, 100.0, mpg=10.0),
+    ]
+
+    small_tank = search_feasible_route_plans(
+        nodes, edges, FuelState(remaining_gal=10.0, capacity_gal=10.0)
+    )
+    large_tank = search_feasible_route_plans(
+        nodes, edges, FuelState(remaining_gal=10.0, capacity_gal=16.0)
+    )
+
+    assert small_tank == []
+    assert len(large_tank) == 1
+
+
+def test_search_feasibility_changes_with_starting_fuel():
+    nodes = build_route_graph_nodes(
+        origin={"lat": 0.0, "lon": 0.0},
+        destination={"lat": 0.0, "lon": 1.0},
+        stations=[{"id": "A", "lat": 0.0, "lon": 0.5, "retail_price": 3.0}],
+    )
+    edges = [
+        build_route_edge(nodes["START"], nodes["A"], 80467.2, 100.0, mpg=10.0),
+        build_route_edge(nodes["A"], nodes["END"], 80467.2, 100.0, mpg=10.0),
+    ]
+
+    low_start = search_feasible_route_plans(
+        nodes, edges, FuelState(remaining_gal=1.0, capacity_gal=10.0)
+    )
+    high_start = search_feasible_route_plans(
+        nodes, edges, FuelState(remaining_gal=8.0, capacity_gal=10.0)
+    )
+
+    assert low_start == []
+    assert len(high_start) == 1
