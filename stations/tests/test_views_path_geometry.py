@@ -133,6 +133,24 @@ def test_select_refuel_waypoints_are_ordered_and_fuel_feasible():
     assert progresses[0] <= 0.55
 
 
+def test_distance_to_polyline_follows_route_shape():
+    straight_distance = views.distance_point_to_segment_m(
+        point_lat=1.0,
+        point_lon=5.0,
+        origin_lat=0.0,
+        origin_lon=0.0,
+        destination_lat=10.0,
+        destination_lon=10.0,
+    )
+    route_distance = views.distance_point_to_polyline_m(
+        point_lat=1.0,
+        point_lon=5.0,
+        polyline=[[0.0, 0.0], [0.0, 10.0], [10.0, 10.0]],
+    )
+
+    assert route_distance < straight_distance
+
+
 class DirectAlternativesProvider:
     def route(self, origin, destination, waypoints=None, include_alternatives=False):
         assert not waypoints

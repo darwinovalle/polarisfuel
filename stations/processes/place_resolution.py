@@ -167,3 +167,30 @@ def distance_point_to_segment_m(
     closest_lon = origin_lon + ((destination_lon - origin_lon) * progress)
 
     return haversine_distance_m(point_lat, point_lon, closest_lat, closest_lon)
+
+
+def distance_point_to_polyline_m(point_lat: float, point_lon: float, polyline: list) -> float:
+    if not isinstance(polyline, list) or len(polyline) < 2:
+        return float("inf")
+
+    distances = []
+    for start, end in zip(polyline, polyline[1:]):
+        if not isinstance(start, (list, tuple)) or not isinstance(end, (list, tuple)):
+            continue
+        if len(start) < 2 or len(end) < 2:
+            continue
+        try:
+            distances.append(
+                distance_point_to_segment_m(
+                    point_lat=point_lat,
+                    point_lon=point_lon,
+                    origin_lat=float(start[0]),
+                    origin_lon=float(start[1]),
+                    destination_lat=float(end[0]),
+                    destination_lon=float(end[1]),
+                )
+            )
+        except (TypeError, ValueError):
+            continue
+
+    return min(distances) if distances else float("inf")

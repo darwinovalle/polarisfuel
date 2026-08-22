@@ -70,11 +70,22 @@ def build_real_station_candidates(
     haversine_distance_m_fn,
     project_progress_ratio_fn,
     distance_point_to_segment_m_fn,
+    route_geometry=None,
+    distance_point_to_polyline_m_fn=None,
 ):
     origin_lat = float(origin_coords["lat"])
     origin_lon = float(origin_coords["lon"])
     destination_lat = float(destination_coords["lat"])
     destination_lon = float(destination_coords["lon"])
+
+    def corridor_distance(**kwargs):
+        if route_geometry and distance_point_to_polyline_m_fn:
+            return distance_point_to_polyline_m_fn(
+                point_lat=kwargs["point_lat"],
+                point_lon=kwargs["point_lon"],
+                polyline=route_geometry,
+            )
+        return distance_point_to_segment_m_fn(**kwargs)
 
     direct_distance_m = haversine_distance_m_fn(
         origin_lat,
@@ -102,7 +113,7 @@ def build_real_station_candidates(
         if progress_ratio < -0.2 or progress_ratio > 1.2:
             continue
 
-        state_distance_m = distance_point_to_segment_m_fn(
+        state_distance_m = corridor_distance(
             point_lat=state_lat,
             point_lon=state_lon,
             origin_lat=origin_lat,
@@ -194,7 +205,7 @@ def build_real_station_candidates(
         if progress_ratio < -0.2 or progress_ratio > 1.2:
             continue
 
-        corridor_distance_m = distance_point_to_segment_m_fn(
+        corridor_distance_m = corridor_distance(
             point_lat=station_lat,
             point_lon=station_lon,
             origin_lat=origin_lat,

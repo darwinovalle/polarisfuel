@@ -166,6 +166,14 @@ def distance_point_to_segment_m(
     )
 
 
+def distance_point_to_polyline_m(point_lat: float, point_lon: float, polyline: list) -> float:
+    return place_resolution.distance_point_to_polyline_m(
+        point_lat=point_lat,
+        point_lon=point_lon,
+        polyline=polyline,
+    )
+
+
 def prioritize_station_rows_for_coverage(
     price_rows,
     origin_coords: dict,
@@ -180,7 +188,12 @@ def prioritize_station_rows_for_coverage(
     )
 
 
-def build_real_station_candidates(price_rows, origin_coords: dict, destination_coords: dict):
+def build_real_station_candidates(
+    price_rows,
+    origin_coords: dict,
+    destination_coords: dict,
+    route_geometry: list | None = None,
+):
     return candidate_selection.build_real_station_candidates(
         price_rows=price_rows,
         origin_coords=origin_coords,
@@ -197,6 +210,8 @@ def build_real_station_candidates(price_rows, origin_coords: dict, destination_c
         haversine_distance_m_fn=haversine_distance_m,
         project_progress_ratio_fn=project_progress_ratio,
         distance_point_to_segment_m_fn=distance_point_to_segment_m,
+        route_geometry=route_geometry,
+        distance_point_to_polyline_m_fn=distance_point_to_polyline_m,
     )
 
 
@@ -584,10 +599,16 @@ def optimize_route(request):
     else:
         reference_fuel_price = 3.75
 
+    direct_route_snapshot = build_direct_route_snapshot(
+        origin_coords=origin_coords,
+        destination_coords=destination_coords,
+    )
+
     candidates = build_real_station_candidates(
         price_rows=prices,
         origin_coords=origin_coords,
         destination_coords=destination_coords,
+        route_geometry=(direct_route_snapshot or {}).get("geometry", []),
     )
 
     candidates.sort(
@@ -692,11 +713,6 @@ def optimize_route(request):
 
     best = result["best_option"]
     alternatives = result["alternatives"][:MAX_CANDIDATES]
-
-    direct_route_snapshot = build_direct_route_snapshot(
-        origin_coords=result["origin"],
-        destination_coords=result["destination"],
-    )
 
     direct_snapshot_distance_m = None
     direct_snapshot_duration_s = None
