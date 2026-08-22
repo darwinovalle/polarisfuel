@@ -78,7 +78,7 @@ omitted so the remaining graph can still produce a valid plan.
 - [x] Return total cost, duration, stops, gallons purchased, and detour details.
 - [x] Add deterministic tests covering Time Weight, Price Weight, MPG, tank
   capacity, and starting fuel.
-- [ ] Document known provider/data limitations in the UI response notices.
+- [x] Document known provider/data limitations in the UI response notices.
 
 ### Phase 4 acceptance criteria
 
@@ -100,6 +100,11 @@ distance, fuel cost, and accumulated detour.
 Deterministic graph tests now demonstrate that MPG, tank capacity, and starting
 fuel alter route feasibility; existing optimizer tests cover Time Weight and
 Price Weight ranking sensitivity.
+
+The response now identifies when complete fuel-aware graph search is active and
+warns that unavailable provider legs are excluded. Existing notices continue to
+identify estimated stops, synthetic station data, and direct-route metric
+fallbacks.
 
 ## Checkpoint workflow
 

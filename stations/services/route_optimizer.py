@@ -124,6 +124,8 @@ class RouteOptimizer:
                 "best_option": best_plan,
                 "alternatives": plan_alternatives,
                 "multi_stop_plans": plan_alternatives,
+                "multi_stop_search_used": True,
+                "multi_stop_plan_count": len(plan_alternatives),
                 "best_path": best_plan["node_ids"],
                 "best_path_cost": best_plan["score"],
             }
@@ -152,6 +154,8 @@ class RouteOptimizer:
             "alternatives": alternatives,
             "best_path": best_path,
             "best_path_cost": best_cost,
+            "multi_stop_search_used": False,
+            "multi_stop_plan_count": 0,
         }
 
     def _build_multi_stop_plans(

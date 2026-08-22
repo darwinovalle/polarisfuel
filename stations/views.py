@@ -956,6 +956,12 @@ def optimize_route(request):
     estimated_waypoint_count = sum(1 for stop in waypoints if stop.get("is_estimated"))
     notices = []
 
+    if result.get("multi_stop_search_used"):
+        notices.append(
+            "Complete fuel-aware route search was used. Route legs are based on "
+            "available provider responses, and unavailable station pairs were excluded."
+        )
+
     if fuel_plan["min_refuel_stops"] > 0 and real_station_pool_count <= 0:
         notices.append(
             "No real fuel stations were found in the local dataset for this route corridor. "
