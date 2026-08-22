@@ -128,6 +128,10 @@
   }
 
   function formatMoney(value) {
+    if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+      return "N/A";
+    }
+
     return "$" + toNumber(value).toFixed(2);
   }
 
@@ -537,7 +541,9 @@
       currentPayload.assumptions,
     );
 
-    const stationPrice = Number(station.retail_price ?? station.price);
+    const stationPrice = station.retail_price == null && station.price == null
+      ? NaN
+      : Number(station.retail_price ?? station.price);
     const stopName = (station.name || "Fuel stop") +
       (station.fuel_type ? " (" + station.fuel_type + ")" : "") +
       (Number.isFinite(stationPrice) ? " - " + formatMoney(stationPrice) : "");
@@ -547,7 +553,9 @@
       destination: currentPayload.destination,
       distance_m: toNumber(alternative.distance_m),
       duration_s: toNumber(alternative.duration_s),
-      fuel_cost: toNumber(alternative.estimated_fuel_cost),
+      fuel_cost: alternative.estimated_fuel_cost == null
+        ? null
+        : toNumber(alternative.estimated_fuel_cost),
       score: toNumber(alternative.score),
       assumptions: currentPayload.assumptions || null,
       waypoints: [],

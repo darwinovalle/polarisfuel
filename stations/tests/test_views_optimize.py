@@ -651,6 +651,8 @@ def test_optimize_route_short_trip_synthetic_stop_stays_on_corridor(client, monk
     assert payload["data_quality"]["real_station_candidates"] == 0
     assert payload["data_quality"]["uses_estimated_waypoints"] is True
     assert payload["data_quality"]["uses_direct_metrics_for_estimated_waypoints"] is True
+    assert payload["fuel_cost"] is None
+    assert payload["alternatives"][0]["station"]["retail_price"] is None
     assert any("No real fuel stations were found" in notice for notice in payload["notices"])
     assert any("Distance and duration are based on the direct route" in notice for notice in payload["notices"])
 
