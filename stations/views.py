@@ -916,6 +916,14 @@ def optimize_route(request):
                 shared_waypoints=waypoints,
             )
 
+    if real_station_pool_count <= 0 and waypoints:
+        for index, stop in enumerate(waypoints):
+            stop["station_id"] = None
+            stop["name"] = f"Estimated Fuel Stop {index + 1}"
+            stop["address"] = "Estimated along route (provider fallback)"
+            stop["retail_price"] = None
+            stop["is_estimated"] = True
+
     all_estimated_waypoints = bool(waypoints) and all(stop.get("is_estimated") for stop in waypoints)
     using_direct_metrics_for_estimated_stops = False
 
