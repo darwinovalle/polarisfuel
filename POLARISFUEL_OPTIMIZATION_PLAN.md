@@ -37,7 +37,7 @@ checked, validated, and committed before the next feature starts.
 - [x] Use the actual TomTom baseline route geometry to find nearby stations.
 - [x] Replace straight-line-only corridor decisions with road-aware detour
   measurements where possible.
-- [ ] Keep synthetic fallback stations clearly separated from verified stations.
+- [x] Keep synthetic fallback stations clearly separated from verified stations.
 
 ### Phase 2 acceptance criteria
 
