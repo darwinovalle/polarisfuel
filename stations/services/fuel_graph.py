@@ -48,6 +48,21 @@ class FuelState:
         )
 
 
+def calculate_refuel_purchase(
+    state: FuelState,
+    fuel_price: float,
+) -> tuple[FuelState, float, float]:
+    if fuel_price < 0:
+        raise ValueError("fuel price cannot be negative")
+
+    gallons_purchased = state.capacity_gal - state.remaining_gal
+    return (
+        state.refueled(),
+        gallons_purchased,
+        gallons_purchased * float(fuel_price),
+    )
+
+
 def build_route_edge(
     from_node: RouteNode,
     to_node: RouteNode,

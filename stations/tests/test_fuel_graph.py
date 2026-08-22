@@ -5,6 +5,7 @@ from stations.services.fuel_graph import (
     RouteNode,
     build_route_edge,
     build_route_graph_nodes,
+    calculate_refuel_purchase,
 )
 
 
@@ -95,3 +96,18 @@ def test_fuel_state_rejects_unreachable_leg():
 
     with pytest.raises(ValueError, match="unreachable"):
         FuelState(remaining_gal=10.0, capacity_gal=16.0).consume(edge)
+
+
+def test_calculate_refuel_purchase_uses_station_price():
+    state = FuelState(remaining_gal=4.0, capacity_gal=16.0)
+
+    refueled, gallons, cost = calculate_refuel_purchase(state, fuel_price=3.25)
+
+    assert refueled.remaining_gal == pytest.approx(16.0)
+    assert gallons == pytest.approx(12.0)
+    assert cost == pytest.approx(39.0)
+
+
+def test_calculate_refuel_purchase_rejects_negative_price():
+    with pytest.raises(ValueError, match="cannot be negative"):
+        calculate_refuel_purchase(FuelState(4.0, 16.0), fuel_price=-1.0)

@@ -54,6 +54,8 @@ checked, validated, and committed before the next feature starts.
   detour cost.
 - [x] Track remaining fuel and enforce tank/range constraints.
 - [ ] Calculate fuel purchases using the price at each selected station.
+- [x] Add a fuel purchase primitive that refills to tank capacity and prices
+  gallons using the selected station.
 - [ ] Search complete feasible station sequences instead of one-stop candidates.
 
 ### Phase 3 acceptance criteria
