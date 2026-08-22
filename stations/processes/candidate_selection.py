@@ -72,6 +72,9 @@ def build_real_station_candidates(
     distance_point_to_segment_m_fn,
     route_geometry=None,
     distance_point_to_polyline_m_fn=None,
+    route_detour_m_fn=None,
+    baseline_route_distance_m=None,
+    max_route_detour_measurements: int = 10,
 ):
     origin_lat = float(origin_coords["lat"])
     origin_lon = float(origin_coords["lon"])
@@ -145,6 +148,7 @@ def build_real_station_candidates(
     geocode_attempts = 0
     consecutive_geo_failures = 0
     geocode_started_at = time.monotonic()
+    route_detour_attempts = 0
 
     def geocode_budget_exhausted() -> bool:
         return (time.monotonic() - geocode_started_at) >= max_station_geocode_seconds
@@ -214,6 +218,16 @@ def build_real_station_candidates(
             destination_lon=destination_lon,
         )
 
+        road_detour_m = None
+        if route_detour_m_fn and route_detour_attempts < max_route_detour_measurements:
+            route_detour_attempts += 1
+            road_detour_m = route_detour_m_fn(
+                origin_coords=origin_coords,
+                destination_coords=destination_coords,
+                station={"lat": station_lat, "lon": station_lon},
+                baseline_distance_m=baseline_route_distance_m,
+            )
+
         if corridor_distance_m > route_corridor_m:
             continue
 
@@ -228,6 +242,7 @@ def build_real_station_candidates(
                 "synthetic": False,
                 "progress_ratio": progress_ratio,
                 "corridor_distance_m": corridor_distance_m,
+                "road_detour_m": road_detour_m,
             }
         )
 

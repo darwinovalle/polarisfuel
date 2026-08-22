@@ -35,7 +35,7 @@ checked, validated, and committed before the next feature starts.
 ## Phase 2: Improve route-aware station discovery
 
 - [x] Use the actual TomTom baseline route geometry to find nearby stations.
-- [ ] Replace straight-line-only corridor decisions with road-aware detour
+- [x] Replace straight-line-only corridor decisions with road-aware detour
   measurements where possible.
 - [ ] Keep synthetic fallback stations clearly separated from verified stations.
 

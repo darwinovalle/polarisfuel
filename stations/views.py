@@ -174,6 +174,60 @@ def distance_point_to_polyline_m(point_lat: float, point_lon: float, polyline: l
     )
 
 
+def measure_station_route_detour(
+    origin_coords: dict,
+    destination_coords: dict,
+    station: dict,
+    baseline_distance_m: float | None = None,
+):
+    if station.get("lat") is None or station.get("lon") is None:
+        return None
+
+    origin = {
+        "lat": float(origin_coords["lat"]),
+        "lon": float(origin_coords["lon"]),
+    }
+    destination = {
+        "lat": float(destination_coords["lat"]),
+        "lon": float(destination_coords["lon"]),
+    }
+    waypoint = {
+        "id": "station-detour",
+        "lat": float(station["lat"]),
+        "lon": float(station["lon"]),
+    }
+
+    if baseline_distance_m is None:
+        for provider in (PATH_DIRECTIONS, PATH_DIRECTIONS_RETRY):
+            if provider is None:
+                continue
+            try:
+                baseline = provider.route(origin, destination, waypoints=[])
+                baseline_distance_m = float(baseline["distance_m"])
+                break
+            except (KeyError, TypeError, ValueError):
+                continue
+            except Exception:
+                continue
+
+    if baseline_distance_m is None:
+        return None
+
+    for provider in (PATH_DIRECTIONS, PATH_DIRECTIONS_RETRY):
+        if provider is None:
+            continue
+        try:
+            route = provider.route(origin, destination, waypoints=[waypoint])
+            route_distance_m = float(route["distance_m"])
+            return max(0.0, route_distance_m - baseline_distance_m)
+        except (KeyError, TypeError, ValueError):
+            continue
+        except Exception:
+            continue
+
+    return None
+
+
 def prioritize_station_rows_for_coverage(
     price_rows,
     origin_coords: dict,
@@ -193,6 +247,7 @@ def build_real_station_candidates(
     origin_coords: dict,
     destination_coords: dict,
     route_geometry: list | None = None,
+    baseline_route_distance_m: float | None = None,
 ):
     return candidate_selection.build_real_station_candidates(
         price_rows=price_rows,
@@ -212,6 +267,8 @@ def build_real_station_candidates(
         distance_point_to_segment_m_fn=distance_point_to_segment_m,
         route_geometry=route_geometry,
         distance_point_to_polyline_m_fn=distance_point_to_polyline_m,
+        route_detour_m_fn=measure_station_route_detour,
+        baseline_route_distance_m=baseline_route_distance_m,
     )
 
 
@@ -609,11 +666,12 @@ def optimize_route(request):
         origin_coords=origin_coords,
         destination_coords=destination_coords,
         route_geometry=(direct_route_snapshot or {}).get("geometry", []),
+        baseline_route_distance_m=(direct_route_snapshot or {}).get("distance_m"),
     )
 
     candidates.sort(
         key=lambda item: (
-            float(item.get("corridor_distance_m", 0.0)),
+            float(item.get("road_detour_m", item.get("corridor_distance_m", 0.0)) or 0.0),
             float(item["retail_price"]),
         )
     )
