@@ -1,6 +1,10 @@
 import pytest
 
-from stations.services.fuel_graph import RouteNode, build_route_graph_nodes
+from stations.services.fuel_graph import (
+    RouteNode,
+    build_route_edge,
+    build_route_graph_nodes,
+)
 
 
 def test_build_route_graph_nodes_includes_endpoints_and_stations():
@@ -39,3 +43,33 @@ def test_build_route_graph_nodes_rejects_duplicate_endpoint_id():
                 }
             ],
         )
+
+
+def test_build_route_edge_calculates_fuel_and_detour_metrics():
+    start = RouteNode("START", "origin", 32.0, -96.0)
+    station = RouteNode("station-a", "station", 33.0, -94.0, fuel_price=3.25)
+
+    edge = build_route_edge(
+        from_node=start,
+        to_node=station,
+        distance_m=1609344.0,
+        duration_s=3600.0,
+        mpg=25.0,
+        detour_m=8046.72,
+    )
+
+    assert edge.from_node == "START"
+    assert edge.to_node == "station-a"
+    assert edge.fuel_consumed_gal == pytest.approx(40.0)
+    assert edge.detour_m == pytest.approx(8046.72)
+
+
+def test_build_route_edge_rejects_invalid_metrics():
+    start = RouteNode("START", "origin", 32.0, -96.0)
+    end = RouteNode("END", "destination", 35.0, -90.0)
+
+    with pytest.raises(ValueError, match="mpg"):
+        build_route_edge(start, end, 1000.0, 60.0, mpg=0.0)
+
+    with pytest.raises(ValueError, match="cannot be negative"):
+        build_route_edge(start, end, -1.0, 60.0, mpg=25.0)

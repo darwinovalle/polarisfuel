@@ -12,6 +12,40 @@ class RouteNode:
     synthetic: bool = False
 
 
+@dataclass(frozen=True)
+class RouteEdge:
+    from_node: str
+    to_node: str
+    distance_m: float
+    duration_s: float
+    fuel_consumed_gal: float
+    detour_m: float = 0.0
+
+
+def build_route_edge(
+    from_node: RouteNode,
+    to_node: RouteNode,
+    distance_m: float,
+    duration_s: float,
+    mpg: float,
+    detour_m: float = 0.0,
+) -> RouteEdge:
+    if distance_m < 0 or duration_s < 0 or detour_m < 0:
+        raise ValueError("route edge metrics cannot be negative")
+    if mpg <= 0:
+        raise ValueError("mpg must be > 0")
+
+    distance_miles = float(distance_m) / 1609.344
+    return RouteEdge(
+        from_node=from_node.node_id,
+        to_node=to_node.node_id,
+        distance_m=float(distance_m),
+        duration_s=float(duration_s),
+        fuel_consumed_gal=distance_miles / float(mpg),
+        detour_m=float(detour_m),
+    )
+
+
 def build_route_graph_nodes(
     origin: dict[str, Any],
     destination: dict[str, Any],

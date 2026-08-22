@@ -50,7 +50,7 @@ checked, validated, and committed before the next feature starts.
 ## Phase 3: Implement complete multi-stop optimization
 
 - [x] Represent stations and route endpoints as graph states.
-- [ ] Model each edge with road distance, duration, fuel consumption, and
+- [x] Model each edge with road distance, duration, fuel consumption, and
   detour cost.
 - [ ] Track remaining fuel and enforce tank/range constraints.
 - [ ] Calculate fuel purchases using the price at each selected station.
