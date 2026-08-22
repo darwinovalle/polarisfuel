@@ -11,5 +11,5 @@ wheels/
 plan.md
 .env
 fuel-prices-for-be-assessment.xlsx
-celerybeat-schedule
+celerybeat-schedule*
 .~lock.fuel-prices-for-be-assessment.xlsx#
