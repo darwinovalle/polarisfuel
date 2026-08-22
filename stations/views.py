@@ -36,8 +36,8 @@ DEFAULT_DIRECTIONS_ENGINE = "tomtom"
 if TOMTOM_API_KEY:
     SEARCH = TomTomSearchProvider(
         api_key=TOMTOM_API_KEY,
-        timeout=2.5,
-        max_retries=1,
+        timeout=3.5,
+        max_retries=2,
     )
     STATION_SEARCH = TomTomSearchProvider(
         api_key=TOMTOM_API_KEY,
@@ -447,7 +447,7 @@ def places_suggest(request):
     results = []
 
     try:
-        results = tomtom_suggest_cached(query)
+        results = tomtom_suggest_cached(normalize_query(query))
     except Exception:
         results = []
 

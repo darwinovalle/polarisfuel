@@ -10,6 +10,7 @@
 
   const REQUEST_TIMEOUT_MS = 45000;
   const SUGGEST_DEBOUNCE_MS = 850;
+  const SUGGEST_TIMEOUT_MS = 8000;
   const MIN_SUGGEST_QUERY_LEN = 3;
 
   const map = L.map("map", { zoomControl: true }).setView([39.8283, -98.5795], 4);
@@ -294,6 +295,7 @@
 
     const controller = new AbortController();
     suggestControllers[kind] = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), SUGGEST_TIMEOUT_MS);
 
     box.innerHTML = '<div class="suggestion-btn">Searching...</div>';
     box.classList.add("active");
@@ -329,6 +331,8 @@
       if (error.name !== "AbortError") {
         hideSuggestionBox(box);
       }
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   }
 
@@ -722,10 +726,10 @@
   });
 
   originInput.addEventListener("blur", () => {
-    window.setTimeout(() => hideSuggestionBox(originSuggestions), 120);
+    window.setTimeout(() => hideSuggestionBox(originSuggestions), 300);
   });
   destinationInput.addEventListener("blur", () => {
-    window.setTimeout(() => hideSuggestionBox(destinationSuggestions), 120);
+    window.setTimeout(() => hideSuggestionBox(destinationSuggestions), 300);
   });
 
   document.addEventListener("click", (event) => {

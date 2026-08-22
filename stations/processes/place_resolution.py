@@ -49,10 +49,9 @@ def tomtom_suggest_cached(query: str, search_provider, suggest_limit: int):
     if search_provider is None:
         return []
 
-    try:
-        return search_provider.suggest(query=query, limit=suggest_limit)
-    except Exception:
-        return []
+    # Let provider failures escape so lru_cache does not permanently cache
+    # an empty result caused by a transient API failure.
+    return search_provider.suggest(query=query, limit=suggest_limit)
 
 
 def resolve_origin_destination(query: str, search_provider, local_place_suggest_fn):

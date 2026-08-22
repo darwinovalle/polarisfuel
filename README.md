@@ -32,6 +32,10 @@ the project directory.
 cp .env.example .env
 ```
 
+Set `TOMTOM_API_KEY` in `.env` to the API key from your TomTom developer
+account. The key is required for location suggestions and live route
+calculation.
+
 ### 2. Start all services
 
 ```bash
@@ -67,6 +71,13 @@ AUTO_IMPORT_ON_STARTUP=1
 Set `AUTO_IMPORT_ON_STARTUP=0` to disable the startup import. The variable name
 `EXCEL_SOURCE_PATH` is kept for compatibility with the existing Celery task,
 but CSV files are supported as well.
+
+After changing `.env`, recreate the web container so Django reads the new
+environment values:
+
+```bash
+docker compose up -d --force-recreate web celery_worker celery_beat
+```
 
 ### 3. Stop services
 
