@@ -6,6 +6,7 @@ from stations.services.fuel_graph import (
     build_route_edge,
     build_route_graph_nodes,
     calculate_refuel_purchase,
+    search_feasible_route_plans,
 )
 
 
@@ -111,3 +112,34 @@ def test_calculate_refuel_purchase_uses_station_price():
 def test_calculate_refuel_purchase_rejects_negative_price():
     with pytest.raises(ValueError, match="cannot be negative"):
         calculate_refuel_purchase(FuelState(4.0, 16.0), fuel_price=-1.0)
+
+
+def test_search_feasible_route_plans_tracks_station_purchase():
+    nodes = build_route_graph_nodes(
+        origin={"lat": 0.0, "lon": 0.0},
+        destination={"lat": 0.0, "lon": 3.0},
+        stations=[
+            {"id": "cheap", "lat": 0.0, "lon": 1.0, "retail_price": 3.0},
+            {"id": "far", "lat": 0.0, "lon": 2.0, "retail_price": 4.0},
+        ],
+    )
+    mpg = 10.0
+    edges = [
+        build_route_edge(nodes["START"], nodes["cheap"], 32186.88, 100.0, mpg),
+        build_route_edge(nodes["cheap"], nodes["END"], 64373.76, 200.0, mpg),
+        build_route_edge(nodes["START"], nodes["far"], 64373.76, 200.0, mpg),
+        build_route_edge(nodes["far"], nodes["END"], 32186.88, 100.0, mpg),
+        build_route_edge(nodes["START"], nodes["END"], 96560.64, 300.0, mpg),
+    ]
+
+    plans = search_feasible_route_plans(
+        nodes,
+        edges,
+        FuelState(remaining_gal=4.0, capacity_gal=16.0),
+    )
+
+    cheap_plan = next(plan for plan in plans if plan.node_ids == ("START", "cheap", "END"))
+    assert cheap_plan.distance_m == pytest.approx(96560.64)
+    assert cheap_plan.fuel_purchases[0]["station_id"] == "cheap"
+    assert cheap_plan.fuel_purchases[0]["gallons"] == pytest.approx(14.0)
+    assert cheap_plan.fuel_cost == pytest.approx(42.0)

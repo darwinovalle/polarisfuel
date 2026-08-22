@@ -4,6 +4,13 @@ import heapq
 from typing import Any
 
 from stations.processes.fuel import calculate_fuel_metrics
+from stations.services.fuel_graph import (
+    FuelState,
+    RouteEdge,
+    build_route_edge,
+    build_route_graph_nodes,
+    search_feasible_route_plans,
+)
 from stations.services.provider_errors import ProviderUnavailableError
 
 
@@ -93,6 +100,31 @@ class RouteOptimizer:
         if not alternatives:
             raise ProviderUnavailableError("No routable station alternatives available")
 
+        multi_stop_plans = self._build_multi_stop_plans(
+            origin=origin,
+            destination=destination,
+            candidate_stations=candidate_stations,
+        )
+        if multi_stop_plans:
+            plan_alternatives = [
+                self._plan_to_alternative(plan, candidate_stations)
+                for plan in multi_stop_plans
+            ]
+            self._apply_scores(plan_alternatives, weights, cost_key="fuel_cost")
+            plan_alternatives.sort(key=lambda item: item["score"])
+            best_plan = plan_alternatives[0]
+            return {
+                "origin": origin,
+                "destination": destination,
+                "baseline_route": None,
+                "weights": weights,
+                "best_option": best_plan,
+                "alternatives": plan_alternatives,
+                "multi_stop_plans": plan_alternatives,
+                "best_path": best_plan["node_ids"],
+                "best_path_cost": best_plan["score"],
+            }
+
         self._apply_scores(alternatives, weights)
         alternatives.sort(key=lambda x: x["score"])
 
@@ -119,6 +151,71 @@ class RouteOptimizer:
             "best_path_cost": best_cost,
         }
 
+    def _build_multi_stop_plans(
+        self,
+        origin: dict[str, Any],
+        destination: dict[str, Any],
+        candidate_stations: list[dict[str, Any]],
+    ):
+        nodes = build_route_graph_nodes(origin, destination, candidate_stations)
+        edges: list[RouteEdge] = []
+        node_list = list(nodes.values())
+
+        for from_node in node_list:
+            for to_node in node_list:
+                if from_node.node_id == to_node.node_id:
+                    continue
+                try:
+                    route_data = self.directions_provider.route(
+                        {"lat": from_node.lat, "lon": from_node.lon},
+                        {"lat": to_node.lat, "lon": to_node.lon},
+                        waypoints=[],
+                    )
+                    edges.append(
+                        build_route_edge(
+                            from_node=from_node,
+                            to_node=to_node,
+                            distance_m=float(route_data["distance_m"]),
+                            duration_s=float(route_data["duration_s"]),
+                            mpg=self.vehicle_miles_per_gallon,
+                            detour_m=float(route_data.get("detour_m", 0.0)),
+                        )
+                    )
+                except Exception:
+                    continue
+
+        initial_state = FuelState(
+            remaining_gal=(
+                self.tank_capacity_gal * self.start_fuel_percent / 100.0
+            ),
+            capacity_gal=self.tank_capacity_gal,
+        )
+        return search_feasible_route_plans(nodes, edges, initial_state)
+
+    @staticmethod
+    def _plan_to_alternative(plan, candidate_stations):
+        stations_by_id = {str(item["id"]): item for item in candidate_stations}
+        stop_ids = [node_id for node_id in plan.node_ids[1:-1]]
+        stops = [stations_by_id[node_id] for node_id in stop_ids]
+        return {
+            "station": stops[0] if stops else {
+                "id": "direct",
+                "name": "Direct Route",
+                "retail_price": 0.0,
+                "synthetic": False,
+            },
+            "stations": stops,
+            "node_ids": list(plan.node_ids),
+            "distance_m": plan.distance_m,
+            "duration_s": plan.duration_s,
+            "detour_m": plan.detour_m,
+            "fuel_cost": plan.fuel_cost,
+            "estimated_fuel_cost": plan.fuel_cost,
+            "fuel_purchases": list(plan.fuel_purchases),
+            "refuel_waypoints": stops,
+            "geometry": "",
+        }
+
     @staticmethod
     def _normalize_coordinate(value: dict[str, Any], default_name: str) -> dict[str, Any]:
         try:
@@ -139,16 +236,21 @@ class RouteOptimizer:
         gallons_needed = distance_miles / self.vehicle_miles_per_gallon
         return gallons_needed * retail_price
 
-    def _apply_scores(self, alternatives: list[dict[str, Any]], weights: dict[str, float]) -> None:
+    def _apply_scores(
+        self,
+        alternatives: list[dict[str, Any]],
+        weights: dict[str, float],
+        cost_key: str = "estimated_fuel_cost",
+    ) -> None:
         durations = [x["duration_s"] for x in alternatives]
-        prices = [x["estimated_fuel_cost"] for x in alternatives]
+        prices = [x[cost_key] for x in alternatives]
 
         min_d, max_d = min(durations), max(durations)
         min_p, max_p = min(prices), max(prices)
 
         for item in alternatives:
             time_norm = self._min_max_norm(item["duration_s"], min_d, max_d)
-            price_norm = self._min_max_norm(item["estimated_fuel_cost"], min_p, max_p)
+            price_norm = self._min_max_norm(item[cost_key], min_p, max_p)
             score = (weights["time"] * time_norm) + (weights["price"] * price_norm)
 
             item["time_norm"] = time_norm

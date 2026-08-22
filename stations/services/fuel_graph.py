@@ -23,6 +23,17 @@ class RouteEdge:
 
 
 @dataclass(frozen=True)
+class FuelRoutePlan:
+    node_ids: tuple[str, ...]
+    edges: tuple[RouteEdge, ...]
+    distance_m: float
+    duration_s: float
+    detour_m: float
+    fuel_cost: float
+    fuel_purchases: tuple[dict[str, float | str], ...]
+
+
+@dataclass(frozen=True)
 class FuelState:
     remaining_gal: float
     capacity_gal: float
@@ -61,6 +72,106 @@ def calculate_refuel_purchase(
         gallons_purchased,
         gallons_purchased * float(fuel_price),
     )
+
+
+def search_feasible_route_plans(
+    nodes: dict[str, RouteNode],
+    edges: list[RouteEdge],
+    initial_state: FuelState,
+    max_plans: int = 100,
+) -> list[FuelRoutePlan]:
+    """Enumerate complete, fuel-feasible simple paths from START to END."""
+    if "START" not in nodes or "END" not in nodes:
+        raise ValueError("route graph must contain START and END nodes")
+    if max_plans <= 0:
+        raise ValueError("max_plans must be > 0")
+
+    outgoing: dict[str, list[RouteEdge]] = {}
+    for edge in edges:
+        if edge.from_node not in nodes or edge.to_node not in nodes:
+            raise ValueError("route edge references an unknown node")
+        outgoing.setdefault(edge.from_node, []).append(edge)
+
+    plans: list[FuelRoutePlan] = []
+
+    def visit(
+        node_id: str,
+        state: FuelState,
+        path: tuple[str, ...],
+        path_edges: tuple[RouteEdge, ...],
+        purchases: tuple[dict[str, float | str], ...],
+        distance_m: float,
+        duration_s: float,
+        detour_m: float,
+        fuel_cost: float,
+    ) -> None:
+        if len(plans) >= max_plans:
+            return
+        if node_id == "END":
+            plans.append(
+                FuelRoutePlan(
+                    node_ids=path,
+                    edges=path_edges,
+                    distance_m=distance_m,
+                    duration_s=duration_s,
+                    detour_m=detour_m,
+                    fuel_cost=fuel_cost,
+                    fuel_purchases=purchases,
+                )
+            )
+            return
+
+        for edge in sorted(outgoing.get(node_id, []), key=lambda item: item.to_node):
+            if edge.to_node in path:
+                continue
+            try:
+                next_state = state.consume(edge)
+            except ValueError:
+                continue
+
+            next_purchases = purchases
+            next_cost = fuel_cost
+            destination = nodes[edge.to_node]
+            if destination.kind == "station":
+                if destination.fuel_price is None:
+                    raise ValueError(f"station {destination.node_id} has no fuel price")
+                next_state, gallons, purchase_cost = calculate_refuel_purchase(
+                    next_state,
+                    destination.fuel_price,
+                )
+                next_purchases = purchases + (
+                    {
+                        "station_id": destination.node_id,
+                        "gallons": gallons,
+                        "cost": purchase_cost,
+                    },
+                )
+                next_cost += purchase_cost
+
+            visit(
+                edge.to_node,
+                next_state,
+                path + (edge.to_node,),
+                path_edges + (edge,),
+                next_purchases,
+                distance_m + edge.distance_m,
+                duration_s + edge.duration_s,
+                detour_m + edge.detour_m,
+                next_cost,
+            )
+
+    visit(
+        "START",
+        initial_state,
+        ("START",),
+        (),
+        (),
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+    )
+    return plans
 
 
 def build_route_edge(

@@ -844,19 +844,31 @@ def optimize_route(request):
                 waypoints=waypoints,
             )
     else:
-        if fuel_plan.get("distance_mi", 0.0) > 0:
-            max_leg_ratio = fuel_plan.get("max_range_mi", 0.0) / fuel_plan["distance_mi"]
+        multi_stop_best = result.get("multi_stop_plans", [])
+        if multi_stop_best and multi_stop_best[0].get("stations"):
+            waypoints = [
+                {
+                    **station,
+                    "lng": station["lon"],
+                    "station_id": station["id"],
+                    "is_estimated": bool(station.get("synthetic", False)),
+                }
+                for station in multi_stop_best[0]["stations"]
+            ]
         else:
-            max_leg_ratio = 1.0
+            if fuel_plan.get("distance_mi", 0.0) > 0:
+                max_leg_ratio = fuel_plan.get("max_range_mi", 0.0) / fuel_plan["distance_mi"]
+            else:
+                max_leg_ratio = 1.0
 
-        waypoints = select_refuel_waypoints(
-            origin_coords=result["origin"],
-            destination_coords=result["destination"],
-            station_pool=station_pool,
-            required_stops=fuel_plan["min_refuel_stops"],
-            initial_reach_ratio=fuel_plan.get("initial_reach_ratio", 1.0),
-            max_leg_ratio=max_leg_ratio,
-        )
+            waypoints = select_refuel_waypoints(
+                origin_coords=result["origin"],
+                destination_coords=result["destination"],
+                station_pool=station_pool,
+                required_stops=fuel_plan["min_refuel_stops"],
+                initial_reach_ratio=fuel_plan.get("initial_reach_ratio", 1.0),
+                max_leg_ratio=max_leg_ratio,
+            )
 
         if direct_route_snapshot is not None:
             waypoints = align_estimated_waypoints_to_route_geometry(

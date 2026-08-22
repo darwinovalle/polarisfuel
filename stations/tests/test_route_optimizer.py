@@ -62,6 +62,25 @@ class AlwaysFailingDirectionsProvider:
         raise RuntimeError("provider down")
 
 
+class MultiStopDirectionsProvider:
+    distances = {
+        ((0.0, 0.0), (0.0, 1.0)): (32186.88, 100.0),
+        ((0.0, 1.0), (0.0, 2.0)): (32186.88, 100.0),
+        ((0.0, 2.0), (0.0, 3.0)): (32186.88, 100.0),
+        ((0.0, 0.0), (0.0, 2.0)): (64373.76, 200.0),
+        ((0.0, 1.0), (0.0, 3.0)): (96560.64, 300.0),
+        ((0.0, 0.0), (0.0, 3.0)): (96560.64, 400.0),
+    }
+
+    def route(self, origin, destination, waypoints=None):
+        key = (
+            (round(float(origin["lat"]), 1), round(float(origin["lon"]), 1)),
+            (round(float(destination["lat"]), 1), round(float(destination["lon"]), 1)),
+        )
+        distance_m, duration_s = self.distances[key]
+        return {"distance_m": distance_m, "duration_s": duration_s, "geometry": []}
+
+
 @pytest.fixture
 def candidate_stations():
     return [
@@ -239,6 +258,35 @@ def test_optimize_skips_unroutable_candidates(candidate_stations):
     ids = [item["station"]["id"] for item in result["alternatives"]]
     assert "A" not in ids
     assert len(ids) == 2
+
+
+def test_optimize_searches_complete_multi_stop_plans():
+    optimizer = RouteOptimizer(
+        geocoding_provider=FakeGeocodingProvider(),
+        directions_provider=MultiStopDirectionsProvider(),
+        vehicle_miles_per_gallon=10.0,
+        tank_capacity_gal=16.0,
+        start_fuel_percent=25.0,
+    )
+    stations = [
+        {"id": "A", "name": "Cheap", "lat": 0.0, "lon": 1.0, "retail_price": 3.0},
+        {"id": "B", "name": "Far", "lat": 0.0, "lon": 2.0, "retail_price": 4.0},
+    ]
+
+    result = optimizer.optimize(
+        "Dallas, TX",
+        "New York, NY",
+        stations,
+        weights={"time": 0.5, "price": 0.5},
+        origin_coords={"lat": 0.0, "lon": 0.0},
+        destination_coords={"lat": 0.0, "lon": 3.0},
+    )
+
+    assert result["best_path"] == ["START", "A", "B", "END"]
+    assert result["best_option"]["fuel_purchases"]
+    assert result["best_option"]["fuel_purchases"][0]["station_id"] == "A"
+    assert result["best_option"]["fuel_purchases"][1]["station_id"] == "B"
+    assert result["best_option"]["distance_m"] == pytest.approx(96560.64)
 
 
 @pytest.mark.django_db

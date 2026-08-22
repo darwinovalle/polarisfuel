@@ -53,10 +53,10 @@ checked, validated, and committed before the next feature starts.
 - [x] Model each edge with road distance, duration, fuel consumption, and
   detour cost.
 - [x] Track remaining fuel and enforce tank/range constraints.
-- [ ] Calculate fuel purchases using the price at each selected station.
+- [x] Calculate fuel purchases using the price at each selected station.
 - [x] Add a fuel purchase primitive that refills to tank capacity and prices
   gallons using the selected station.
-- [ ] Search complete feasible station sequences instead of one-stop candidates.
+- [x] Search complete feasible station sequences instead of one-stop candidates.
 
 ### Phase 3 acceptance criteria
 
@@ -66,6 +66,11 @@ checked, validated, and committed before the next feature starts.
 - The optimizer can choose between zero, one, or multiple stops based on the
   vehicle inputs and route data.
 - The selected plan is scored after all route legs and fuel purchases are known.
+
+The graph search now requests pairwise route legs, enumerates simple
+origin-to-destination paths, rejects fuel-infeasible legs, refuels at selected
+stations, and scores complete plans. Provider failures on individual pairs are
+omitted so the remaining graph can still produce a valid plan.
 
 ## Phase 4: Validate and explain decisions
 
