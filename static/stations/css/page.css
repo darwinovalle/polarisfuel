@@ -414,7 +414,7 @@ body.request-loader-open {
 }
 
 .alternatives-list {
-  max-height: 220px;
+  max-height: 100px;
   overflow: auto;
 }
 

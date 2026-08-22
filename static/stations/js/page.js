@@ -565,8 +565,28 @@
     route.fuel_plan = sharedFuelPlan || buildFuelPlan(route.distance_m, route.assumptions);
     const sharedStopsRequired = toNumber(sharedFuelPlan && sharedFuelPlan.min_refuel_stops) > 0;
     const shouldUseSharedRefuelPlan = sharedWaypoints.length > 0 && sharedStopsRequired;
+    const alternativeStations = Array.isArray(alternative.stations)
+      ? alternative.stations
+      : stationHasCoords
+        ? [station]
+        : [];
+    const ownAlternativeWaypoints = alternativeStations.map((stop) => {
+      const lat = parseCoordinate(stop.lat, -90, 90);
+      const lng = parseCoordinate(stop.lng ?? stop.lon, -180, 180);
+      if (lat === null || lng === null) {
+        return null;
+      }
 
-    if (shouldUseSharedRefuelPlan) {
+      return {
+        lat,
+        lng,
+        name: stop.name || "Fuel Stop",
+        address: stop.address || "",
+        type: stop.type || "Refuel Stop",
+      };
+    }).filter((wp) => wp !== null);
+
+    if (shouldUseSharedRefuelPlan && ownAlternativeWaypoints.length === 0) {
       const normalizedSharedWaypoints = sharedWaypoints.map((wp) => {
         const waypointLat = parseCoordinate(wp.lat, -90, 90);
         const waypointLng = parseCoordinate(wp.lng, -180, 180);
@@ -611,6 +631,18 @@
         ];
       }
 
+      return route;
+    }
+
+    if (ownAlternativeWaypoints.length > 0) {
+      route.waypoints = ownAlternativeWaypoints;
+      route.path = hasAlternativePath
+        ? alternativePath
+        : [
+            [currentPayload.origin.lat, currentPayload.origin.lng],
+            ...ownAlternativeWaypoints.map((wp) => [wp.lat, wp.lng]),
+            [currentPayload.destination.lat, currentPayload.destination.lng],
+          ];
       return route;
     }
 
