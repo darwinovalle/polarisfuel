@@ -218,6 +218,18 @@ class RouteOptimizer:
             "fuel_cost": fuel_cost,
             "estimated_fuel_cost": fuel_cost,
             "fuel_purchases": list(plan.fuel_purchases),
+            "edge_metrics": [
+                {
+                    "from_node": edge.from_node,
+                    "to_node": edge.to_node,
+                    "distance_m": edge.distance_m,
+                    "duration_s": edge.duration_s,
+                    "fuel_consumed_gal": edge.fuel_consumed_gal,
+                    "detour_m": edge.detour_m,
+                }
+                for edge in plan.edges
+            ],
+            "stop_count": len(stops),
             "refuel_waypoints": stops,
             "geometry": "",
         }

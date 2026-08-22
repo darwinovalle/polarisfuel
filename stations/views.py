@@ -797,6 +797,26 @@ def optimize_route(request):
     if graph_alternatives:
         alternatives = graph_alternatives
         best = graph_alternatives[0]
+        actual_fuel_consumed = sum(
+            float(edge.get("fuel_consumed_gal", 0.0))
+            for edge in best.get("edge_metrics", [])
+        )
+        actual_fuel_purchased = sum(
+            float(purchase.get("gallons", 0.0))
+            for purchase in best.get("fuel_purchases", [])
+        )
+        fuel_plan = {
+            **build_fuel_plan(
+                best["distance_m"],
+                mpg=vehicle_mpg,
+                tank_capacity_gal=tank_capacity_gal,
+                start_fuel_percent=start_fuel_percent,
+            ),
+            "fuel_consumed_gal": actual_fuel_consumed,
+            "fuel_purchased_gal": actual_fuel_purchased,
+            "min_refuel_stops": len(best.get("fuel_purchases", [])),
+            "requires_refuel": bool(best.get("fuel_purchases")),
+        }
         waypoints = [
             {
                 **station,
@@ -981,6 +1001,9 @@ def optimize_route(request):
         "distance_m": best["distance_m"],
         "duration_s": best["duration_s"],
         "fuel_cost": best["estimated_fuel_cost"],
+        "fuel_purchases": best.get("fuel_purchases", []),
+        "stop_count": len(best.get("stations", [])),
+        "detour_m": float(best.get("detour_m", 0.0)),
         "score": best["score"],
         "path": path,
         "alternatives": alternatives,
