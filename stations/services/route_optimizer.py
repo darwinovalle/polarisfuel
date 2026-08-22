@@ -110,7 +110,12 @@ class RouteOptimizer:
                 float(station["retail_price"]) for station in candidate_stations
             ) / len(candidate_stations)
             plan_alternatives = [
-                self._plan_to_alternative(plan, candidate_stations, reference_price)
+                self._plan_to_alternative(
+                    plan,
+                    candidate_stations,
+                    reference_price,
+                    self.tank_capacity_gal * self.start_fuel_percent / 100.0,
+                )
                 for plan in multi_stop_plans
             ]
             self._apply_scores(plan_alternatives, weights, cost_key="fuel_cost")
@@ -186,6 +191,7 @@ class RouteOptimizer:
                             duration_s=float(route_data["duration_s"]),
                             mpg=self.vehicle_miles_per_gallon,
                             detour_m=float(route_data.get("detour_m", 0.0)),
+                            geometry=route_data.get("geometry", []),
                         )
                     )
                 except Exception:
@@ -200,13 +206,19 @@ class RouteOptimizer:
         return search_feasible_route_plans(nodes, edges, initial_state)
 
     @staticmethod
-    def _plan_to_alternative(plan, candidate_stations, reference_price):
+    def _plan_to_alternative(plan, candidate_stations, reference_price, initial_fuel_gal):
         stations_by_id = {str(item["id"]): item for item in candidate_stations}
         stop_ids = [node_id for node_id in plan.node_ids[1:-1]]
         stops = [stations_by_id[node_id] for node_id in stop_ids]
         fuel_cost = plan.fuel_cost
         if not stops:
-            fuel_cost = sum(edge.fuel_consumed_gal for edge in plan.edges) * reference_price
+            consumed = sum(edge.fuel_consumed_gal for edge in plan.edges)
+            fuel_cost = max(0.0, consumed - initial_fuel_gal) * reference_price
+        geometry = []
+        for edge in plan.edges:
+            for point in edge.geometry:
+                if not geometry or geometry[-1] != list(point):
+                    geometry.append(list(point))
         return {
             "station": stops[0] if stops else {
                 "id": "direct",
@@ -235,7 +247,7 @@ class RouteOptimizer:
             ],
             "stop_count": len(stops),
             "refuel_waypoints": stops,
-            "geometry": "",
+            "geometry": geometry,
         }
 
     @staticmethod

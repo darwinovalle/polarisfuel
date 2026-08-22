@@ -417,7 +417,7 @@ def test_optimize_route_retries_tomtom_before_success(client, monkeypatch):
     payload = response.json()
 
     assert payload["engine"] == views.DEFAULT_DIRECTIONS_ENGINE
-    assert payload["fuel_cost"] == pytest.approx(12.0)
+    assert payload["fuel_cost"] == pytest.approx(0.0)
     assert calls["primary"] >= 1
     assert calls["retry"] >= 1
 

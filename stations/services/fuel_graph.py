@@ -20,6 +20,7 @@ class RouteEdge:
     duration_s: float
     fuel_consumed_gal: float
     detour_m: float = 0.0
+    geometry: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -181,6 +182,7 @@ def build_route_edge(
     duration_s: float,
     mpg: float,
     detour_m: float = 0.0,
+    geometry: list | tuple = (),
 ) -> RouteEdge:
     if distance_m < 0 or duration_s < 0 or detour_m < 0:
         raise ValueError("route edge metrics cannot be negative")
@@ -195,6 +197,11 @@ def build_route_edge(
         duration_s=float(duration_s),
         fuel_consumed_gal=distance_miles / float(mpg),
         detour_m=float(detour_m),
+        geometry=tuple(
+            (float(point[0]), float(point[1]))
+            for point in geometry
+            if isinstance(point, (list, tuple)) and len(point) >= 2
+        ),
     )
 
 
