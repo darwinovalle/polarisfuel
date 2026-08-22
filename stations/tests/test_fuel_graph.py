@@ -1,6 +1,7 @@
 import pytest
 
 from stations.services.fuel_graph import (
+    FuelState,
     RouteNode,
     build_route_edge,
     build_route_graph_nodes,
@@ -73,3 +74,24 @@ def test_build_route_edge_rejects_invalid_metrics():
 
     with pytest.raises(ValueError, match="cannot be negative"):
         build_route_edge(start, end, -1.0, 60.0, mpg=25.0)
+
+
+def test_fuel_state_consumes_and_refuels_at_capacity():
+    start = RouteNode("START", "origin", 32.0, -96.0)
+    station = RouteNode("station-a", "station", 33.0, -94.0, fuel_price=3.25)
+    edge = build_route_edge(start, station, 160934.4, 3600.0, mpg=25.0)
+    state = FuelState(remaining_gal=8.0, capacity_gal=16.0)
+
+    after_leg = state.consume(edge)
+
+    assert after_leg.remaining_gal == pytest.approx(4.0)
+    assert after_leg.refueled().remaining_gal == pytest.approx(16.0)
+
+
+def test_fuel_state_rejects_unreachable_leg():
+    start = RouteNode("START", "origin", 32.0, -96.0)
+    end = RouteNode("END", "destination", 35.0, -90.0)
+    edge = build_route_edge(start, end, 482803.2, 3600.0, mpg=25.0)
+
+    with pytest.raises(ValueError, match="unreachable"):
+        FuelState(remaining_gal=10.0, capacity_gal=16.0).consume(edge)

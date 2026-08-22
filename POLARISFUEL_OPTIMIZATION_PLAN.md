@@ -52,7 +52,7 @@ checked, validated, and committed before the next feature starts.
 - [x] Represent stations and route endpoints as graph states.
 - [x] Model each edge with road distance, duration, fuel consumption, and
   detour cost.
-- [ ] Track remaining fuel and enforce tank/range constraints.
+- [x] Track remaining fuel and enforce tank/range constraints.
 - [ ] Calculate fuel purchases using the price at each selected station.
 - [ ] Search complete feasible station sequences instead of one-stop candidates.
 

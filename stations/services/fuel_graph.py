@@ -22,6 +22,32 @@ class RouteEdge:
     detour_m: float = 0.0
 
 
+@dataclass(frozen=True)
+class FuelState:
+    remaining_gal: float
+    capacity_gal: float
+
+    def __post_init__(self):
+        if self.capacity_gal <= 0:
+            raise ValueError("fuel capacity must be > 0")
+        if self.remaining_gal < 0 or self.remaining_gal > self.capacity_gal:
+            raise ValueError("remaining fuel must be within tank capacity")
+
+    def refueled(self) -> "FuelState":
+        return FuelState(
+            remaining_gal=self.capacity_gal,
+            capacity_gal=self.capacity_gal,
+        )
+
+    def consume(self, edge: "RouteEdge") -> "FuelState":
+        if edge.fuel_consumed_gal > self.remaining_gal + 1e-9:
+            raise ValueError("route edge is unreachable with remaining fuel")
+        return FuelState(
+            remaining_gal=self.remaining_gal - edge.fuel_consumed_gal,
+            capacity_gal=self.capacity_gal,
+        )
+
+
 def build_route_edge(
     from_node: RouteNode,
     to_node: RouteNode,
