@@ -10,7 +10,7 @@ checked, validated, and committed before the next feature starts.
   their ranking.
 - [ ] Make vehicle MPG, tank capacity, and starting fuel participate in one
   consistent route-cost model.
-- [ ] Add explicit score breakdowns and tests for parameter sensitivity.
+- [x] Add explicit score breakdowns and tests for parameter sensitivity.
 
 ## Phase 2: Improve route-aware station discovery
 

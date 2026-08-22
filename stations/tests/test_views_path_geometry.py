@@ -131,3 +131,48 @@ def test_select_refuel_waypoints_are_ordered_and_fuel_feasible():
     assert progresses == sorted(progresses)
     # First stop should be reachable from initial fuel range with small tolerance.
     assert progresses[0] <= 0.55
+
+
+class DirectAlternativesProvider:
+    def route(self, origin, destination, waypoints=None, include_alternatives=False):
+        assert not waypoints
+        return {
+            "alternatives": [
+                {
+                    "distance_m": 1609344.0,
+                    "duration_s": 1000.0,
+                    "geometry": [[origin["lat"], origin["lon"]], [destination["lat"], destination["lon"]]],
+                },
+                {
+                    "distance_m": 1931212.8,
+                    "duration_s": 1200.0,
+                    "geometry": [[origin["lat"], origin["lon"]], [destination["lat"], destination["lon"]]],
+                },
+            ]
+        }
+
+
+def test_direct_route_alternatives_apply_time_and_price_weights(monkeypatch):
+    provider = DirectAlternativesProvider()
+    monkeypatch.setattr(views, "PATH_DIRECTIONS", provider)
+    monkeypatch.setattr(views, "PATH_DIRECTIONS_RETRY", None)
+
+    common = {
+        "origin_coords": {"lat": 32.0, "lon": -96.0},
+        "destination_coords": {"lat": 35.0, "lon": -90.0},
+        "vehicle_mpg": 25.0,
+        "reference_fuel_price": 3.5,
+        "max_options": 2,
+    }
+
+    fastest = views.build_direct_route_alternatives(
+        **common,
+        weights={"time": 1.0, "price": 0.0},
+    )
+    cheapest = views.build_direct_route_alternatives(
+        **common,
+        weights={"time": 0.0, "price": 1.0},
+    )
+
+    assert fastest[0]["duration_s"] == 1000.0
+    assert cheapest[0]["distance_m"] == 1609344.0
