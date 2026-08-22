@@ -18,6 +18,8 @@ checked, validated, and committed before the next feature starts.
   their ranking.
 - [ ] Make vehicle MPG, tank capacity, and starting fuel participate in one
   consistent route-cost model.
+- [x] Attach shared fuel metrics to station and direct route alternatives as a
+  foundation for complete fuel-aware scoring.
 - [x] Add explicit score breakdowns and tests for parameter sensitivity.
 
 ### Phase 1 acceptance criteria

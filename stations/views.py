@@ -314,6 +314,8 @@ def build_direct_route_alternatives(
     reference_fuel_price: float,
     max_options: int = 3,
     weights: dict | None = None,
+    tank_capacity_gal: float = DEFAULT_TANK_CAPACITY_GAL,
+    start_fuel_percent: float = DEFAULT_START_FUEL_PERCENT,
 ):
     return routing.build_direct_route_alternatives(
         origin_coords=origin_coords,
@@ -326,6 +328,8 @@ def build_direct_route_alternatives(
         max_options=max_options,
         default_vehicle_mpg=DEFAULT_VEHICLE_MPG,
         weights=weights,
+        tank_capacity_gal=tank_capacity_gal,
+        start_fuel_percent=start_fuel_percent,
     )
 
 
@@ -645,6 +649,8 @@ def optimize_route(request):
             geocoding_provider=SEARCH,
             directions_provider=directions_provider,
             vehicle_miles_per_gallon=vehicle_mpg,
+            tank_capacity_gal=tank_capacity_gal,
+            start_fuel_percent=start_fuel_percent,
         )
         return optimizer.optimize(
             origin_query=origin,
@@ -721,6 +727,8 @@ def optimize_route(request):
             reference_fuel_price=reference_fuel_price,
             max_options=MAX_CANDIDATES,
             weights={"time": time_weight, "price": price_weight},
+            tank_capacity_gal=tank_capacity_gal,
+            start_fuel_percent=start_fuel_percent,
         )
 
         if direct_alternatives:

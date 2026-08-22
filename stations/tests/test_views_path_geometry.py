@@ -176,3 +176,5 @@ def test_direct_route_alternatives_apply_time_and_price_weights(monkeypatch):
 
     assert fastest[0]["duration_s"] == 1000.0
     assert cheapest[0]["distance_m"] == 1609344.0
+    assert cheapest[0]["fuel_plan"]["tank_capacity_gal"] == pytest.approx(16.0)
+    assert cheapest[0]["fuel_plan"]["start_fuel_percent"] == pytest.approx(100.0)

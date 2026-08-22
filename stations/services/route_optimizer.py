@@ -3,6 +3,7 @@ from __future__ import annotations
 import heapq
 from typing import Any
 
+from stations.processes.fuel import calculate_fuel_metrics
 from stations.services.provider_errors import ProviderUnavailableError
 
 
@@ -13,6 +14,8 @@ class RouteOptimizer:
         directions_provider,
         vehicle_km_per_liter: float = 3.0,
         vehicle_miles_per_gallon: float | None = None,
+        tank_capacity_gal: float = 16.0,
+        start_fuel_percent: float = 100.0,
     ):
         if vehicle_miles_per_gallon is None:
             if vehicle_km_per_liter <= 0:
@@ -27,6 +30,8 @@ class RouteOptimizer:
         self.directions_provider = directions_provider
         self.vehicle_miles_per_gallon = float(vehicle_miles_per_gallon)
         self.vehicle_km_per_liter = self.vehicle_miles_per_gallon / 2.352145833
+        self.tank_capacity_gal = float(tank_capacity_gal)
+        self.start_fuel_percent = float(start_fuel_percent)
 
     def optimize(
         self,
@@ -67,6 +72,12 @@ class RouteOptimizer:
             duration_s = float(route_data["duration_s"])
             station_price = float(station["retail_price"])
             estimated_fuel_cost = self._estimate_fuel_cost(distance_m, station_price)
+            fuel_metrics = calculate_fuel_metrics(
+                distance_m=distance_m,
+                mpg=self.vehicle_miles_per_gallon,
+                tank_capacity_gal=self.tank_capacity_gal,
+                start_fuel_percent=self.start_fuel_percent,
+            )
 
             alternatives.append(
                 {
@@ -75,6 +86,7 @@ class RouteOptimizer:
                     "duration_s": duration_s,
                     "geometry": route_data.get("geometry", ""),
                     "estimated_fuel_cost": estimated_fuel_cost,
+                    "fuel_plan": fuel_metrics,
                 }
             )
 

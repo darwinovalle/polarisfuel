@@ -165,6 +165,9 @@ def test_output_contains_score_breakdown(candidate_stations):
     assert "distance_m" in first
     assert "duration_s" in first
     assert "estimated_fuel_cost" in first
+    assert first["fuel_plan"]["avg_mpg"] == pytest.approx(7.056437499)
+    assert first["fuel_plan"]["tank_capacity_gal"] == pytest.approx(16.0)
+    assert first["fuel_plan"]["start_fuel_percent"] == pytest.approx(100.0)
 
 
 def test_dijkstra_finds_lowest_cost_path_on_small_graph():

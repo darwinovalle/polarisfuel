@@ -47,6 +47,27 @@ def build_fuel_plan(
     }
 
 
+def calculate_fuel_metrics(
+    distance_m: float,
+    mpg: float,
+    tank_capacity_gal: float,
+    start_fuel_percent: float,
+):
+    plan = build_fuel_plan(
+        distance_m=distance_m,
+        mpg=mpg,
+        tank_capacity_gal=tank_capacity_gal,
+        start_fuel_percent=start_fuel_percent,
+    )
+    fuel_consumed_gal = plan["gallons_needed"]
+    fuel_purchased_gal = max(0.0, fuel_consumed_gal - plan["initial_fuel_gal"])
+    return {
+        **plan,
+        "fuel_consumed_gal": fuel_consumed_gal,
+        "fuel_purchased_gal": fuel_purchased_gal,
+    }
+
+
 def parse_positive_float_param(raw_value, field_name: str, default_value: float) -> float:
     value = (raw_value or "").strip()
     if value == "":

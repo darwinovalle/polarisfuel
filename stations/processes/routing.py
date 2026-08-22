@@ -1,5 +1,8 @@
 
 
+from stations.processes.fuel import calculate_fuel_metrics
+
+
 def build_path_with_waypoints(origin_coords: dict, destination_coords: dict, waypoints: list):
     path = [[float(origin_coords["lat"]), float(origin_coords["lon"])]]
     path.extend([[float(stop["lat"]), float(stop["lng"])] for stop in waypoints])
@@ -212,6 +215,8 @@ def build_direct_route_alternatives(
     max_options: int,
     default_vehicle_mpg: float,
     weights: dict | None = None,
+    tank_capacity_gal: float = 16.0,
+    start_fuel_percent: float = 100.0,
 ):
     origin = {
         "lat": float(origin_coords["lat"]),
@@ -267,6 +272,12 @@ def build_direct_route_alternatives(
                     "duration_s": duration_s,
                     "geometry": geometry,
                     "estimated_fuel_cost": fuel_cost,
+                    "fuel_plan": calculate_fuel_metrics(
+                        distance_m=distance_m,
+                        mpg=safe_mpg,
+                        tank_capacity_gal=tank_capacity_gal,
+                        start_fuel_percent=start_fuel_percent,
+                    ),
                 }
             )
 
