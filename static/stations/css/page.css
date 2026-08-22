@@ -542,6 +542,10 @@ body.request-loader-open {
   background: var(--green);
 }
 
+.node.fallback {
+  background: #ef4444;
+}
+
 .node.end {
   background: var(--blue);
 }

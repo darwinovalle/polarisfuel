@@ -282,11 +282,10 @@ def test_optimize_searches_complete_multi_stop_plans():
         destination_coords={"lat": 0.0, "lon": 3.0},
     )
 
-    assert result["best_path"] == ["START", "A", "B", "END"]
+    assert result["best_path"] == ["START", "A", "END"]
     assert result["best_option"]["fuel_purchases"]
     assert result["best_option"]["fuel_purchases"][0]["station_id"] == "A"
-    assert result["best_option"]["fuel_purchases"][1]["station_id"] == "B"
-    assert result["best_option"]["distance_m"] == pytest.approx(96560.64)
+    assert result["best_option"]["distance_m"] == pytest.approx(128747.52)
 
 
 @pytest.mark.django_db

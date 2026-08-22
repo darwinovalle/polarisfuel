@@ -35,6 +35,7 @@
     start: markerIcon("#ffffff"),
     end: markerIcon("#3b82f6"),
     stop: markerIcon("#22c55e"),
+    fallback: markerIcon("#ef4444"),
   };
 
   const form = document.getElementById("routeForm");
@@ -358,23 +359,69 @@
 
   function renderRouteDetails(data) {
     const rows = [];
+    const fallbackStops = Array.isArray(data.fallback_points) && data.fallback_points.length > 0
+      ? data.fallback_points
+      : (data.route_segments && Array.isArray(data.route_segments.stops)
+        ? data.route_segments.stops.filter((stop) => stop.is_fallback)
+        : []);
+    const rawStops = [...(data.waypoints || []), ...fallbackStops]
+      .sort((a, b) => toNumber(a.progress_ratio) - toNumber(b.progress_ratio));
+    const suppliedStops = data.route_segments && Array.isArray(data.route_segments.stops)
+      ? data.route_segments.stops
+      : [];
+    const suppliedSequenceMatches = suppliedStops.length === rawStops.length &&
+      suppliedStops.every((stop, index) => {
+        const rawStop = rawStops[index];
+        return Math.abs(toNumber(stop.lat) - toNumber(rawStop.lat)) < 0.01 &&
+          Math.abs(toNumber(stop.lng) - toNumber(rawStop.lng)) < 0.01;
+      });
+    const distanceMeters = toNumber(data.distance_m);
+    const stops = suppliedSequenceMatches ? suppliedStops : rawStops.map((stop, index) => ({
+      ...stop,
+      distance_from_previous_m: (
+        toNumber(stop.progress_ratio, (index + 1) / (rawStops.length + 1)) -
+        (index === 0 ? 0 : toNumber(rawStops[index - 1].progress_ratio, index / (rawStops.length + 1)))
+      ) * distanceMeters,
+      distance_to_next_m: (
+        1 - toNumber(stop.progress_ratio, (index + 1) / (rawStops.length + 1))
+      ) * distanceMeters,
+    }));
+    const segmentData = suppliedSequenceMatches
+      ? data.route_segments
+      : {
+          destination_distance_m: stops.length
+            ? toNumber(stops[stops.length - 1].distance_to_next_m)
+            : distanceMeters,
+        };
+
+    function distanceRow(label, distanceMeters) {
+      if (!Number.isFinite(Number(distanceMeters))) {
+        return "";
+      }
+      return '<div class="route-sub">' + esc(label) + ": " + formatMiles(distanceMeters) + "</div>";
+    }
 
     rows.push(
       '<div class="route-item">' +
         '<div class="node-wrap"><div class="node start"></div><div class="line"></div></div>' +
-        '<div><div class="route-label">Start</div><div class="route-name">' + esc(data.origin.name) + "</div></div>" +
+        '<div><div class="route-label">Start</div><div class="route-name">' + esc(data.origin.name) + "</div>" +
+          distanceRow("To next stop", stops.length ? stops[0].distance_from_previous_m : segmentData.destination_distance_m) +
+        "</div>" +
       "</div>"
     );
 
-    (data.waypoints || []).forEach((wp) => {
-      const addressRow = wp.address
-        ? '<div class="route-sub">' + esc(wp.address) + "</div>"
-        : "";
+    stops.forEach((point) => {
+      const estimated = !!point.is_fallback;
 
       rows.push(
         '<div class="route-item">' +
-          '<div class="node-wrap"><div class="node stop"></div><div class="line"></div></div>' +
-          '<div><div class="route-label">' + esc(wp.type || "Stop") + '</div><div class="route-name">' + esc(wp.name) + "</div>" + addressRow + "</div>" +
+          '<div class="node-wrap"><div class="node ' + (estimated ? "fallback" : "stop") + '"></div><div class="line"></div></div>' +
+          '<div><div class="route-label">' + esc(estimated ? "Minimum Refuel Point" : (point.type || "Stop")) +
+            '</div><div class="route-name">' + esc(point.name || "Fuel stop") + "</div>" +
+            (point.address ? '<div class="route-sub">' + esc(point.address) + "</div>" : "") +
+            distanceRow("From previous point", point.distance_from_previous_m) +
+            distanceRow("To next point", point.distance_to_next_m) +
+          "</div>" +
         "</div>"
       );
     });
@@ -382,7 +429,9 @@
     rows.push(
       '<div class="route-item">' +
         '<div class="node-wrap"><div class="node end"></div><div class="line"></div></div>' +
-        '<div><div class="route-label">End</div><div class="route-name">' + esc(data.destination.name) + "</div></div>" +
+        '<div><div class="route-label">End</div><div class="route-name">' + esc(data.destination.name) + "</div>" +
+          distanceRow("From previous point", segmentData.destination_distance_m) +
+        "</div>" +
       "</div>"
     );
 
@@ -393,6 +442,11 @@
     layerGroup.clearLayers();
 
     const bounds = [];
+    const fallbackStops = Array.isArray(data.fallback_points) && data.fallback_points.length > 0
+      ? data.fallback_points
+      : (data.route_segments && Array.isArray(data.route_segments.stops)
+        ? data.route_segments.stops.filter((stop) => stop.is_fallback)
+        : []);
 
     if (Array.isArray(data.path) && data.path.length > 1) {
       const polyline = L.polyline(data.path, {
@@ -416,10 +470,18 @@
     }
 
     (data.waypoints || []).forEach((wp) => {
-      const m = L.marker([wp.lat, wp.lng], { icon: icons.stop }).addTo(layerGroup);
+      const icon = wp.is_fallback ? icons.fallback : icons.stop;
+      const m = L.marker([wp.lat, wp.lng], { icon }).addTo(layerGroup);
       const addressSuffix = wp.address ? "<br>" + esc(wp.address) : "";
-      m.bindPopup("<b>" + esc(wp.type || "Stop") + "</b><br>" + esc(wp.name) + addressSuffix);
+      m.bindPopup("<b>" + esc(wp.is_fallback ? "Minimum Refuel Point" : (wp.type || "Stop")) + "</b><br>" + esc(wp.name) + addressSuffix);
       bounds.push([wp.lat, wp.lng]);
+    });
+
+    fallbackStops.forEach((point) => {
+      const m = L.marker([point.lat, point.lng], { icon: icons.fallback }).addTo(layerGroup);
+      const addressSuffix = point.address ? "<br>" + esc(point.address) : "";
+      m.bindPopup("<b>Minimum Refuel Point</b><br>" + esc(point.name) + addressSuffix);
+      bounds.push([point.lat, point.lng]);
     });
 
     if (bounds.length === 1) {
@@ -540,10 +602,20 @@
       currentPayload.distance_m,
       currentPayload.assumptions,
     );
+    const alternativeStationIsFallback =
+      station.station_record === false ||
+      (station.station_record == null && (!!station.synthetic || !!station.is_estimated)) ||
+      !!station.is_fallback;
+    const hasAlternativeRefuelPlan =
+      !alternativeStationIsFallback &&
+      ((Array.isArray(alternative.refuel_waypoints) && alternative.refuel_waypoints.length > 0) ||
+        (Array.isArray(alternative.stations) && alternative.stations.length > 0));
 
     const stationPrice = station.retail_price == null && station.price == null
       ? NaN
       : Number(station.retail_price ?? station.price);
+    const stationIsVerified = stationHasCoords &&
+      !alternativeStationIsFallback;
     const stopName = (station.name || "Fuel stop") +
       (station.fuel_type ? " (" + station.fuel_type + ")" : "") +
       (Number.isFinite(stationPrice) ? " - " + formatMoney(stationPrice) : "");
@@ -559,17 +631,26 @@
       score: toNumber(alternative.score),
       assumptions: currentPayload.assumptions || null,
       waypoints: [],
+      fallback_points: hasAlternativeRefuelPlan
+        ? []
+        : currentPayload.fallback_points ||
+        (currentPayload.route_segments && Array.isArray(currentPayload.route_segments.stops)
+          ? currentPayload.route_segments.stops.filter((stop) => stop.is_fallback)
+          : []),
+      route_segments: alternative.route_segments || currentPayload.route_segments || null,
       path: [],
     };
 
     route.fuel_plan = sharedFuelPlan || buildFuelPlan(route.distance_m, route.assumptions);
     const sharedStopsRequired = toNumber(sharedFuelPlan && sharedFuelPlan.min_refuel_stops) > 0;
     const shouldUseSharedRefuelPlan = sharedWaypoints.length > 0 && sharedStopsRequired;
-    const alternativeStations = Array.isArray(alternative.stations)
+    const alternativeStations = Array.isArray(alternative.stations) && alternative.stations.length > 0
       ? alternative.stations
-      : stationHasCoords
-        ? [station]
-        : [];
+      : hasAlternativeRefuelPlan
+        ? []
+        : stationIsVerified
+          ? [station]
+          : [];
     const ownAlternativeWaypoints = alternativeStations.map((stop) => {
       const lat = parseCoordinate(stop.lat, -90, 90);
       const lng = parseCoordinate(stop.lng ?? stop.lon, -180, 180);
@@ -583,6 +664,10 @@
         name: stop.name || "Fuel Stop",
         address: stop.address || "",
         type: stop.type || "Refuel Stop",
+        progress_ratio: stop.progress_ratio,
+        is_estimated: !!stop.is_estimated,
+        is_fallback: !!stop.is_fallback,
+        station_record: stop.station_record !== false,
       };
     }).filter((wp) => wp !== null);
 
@@ -596,6 +681,10 @@
           name: wp.name || "Fuel Stop",
           address: wp.address || "",
           type: wp.type || "Refuel Stop",
+          progress_ratio: wp.progress_ratio,
+          is_estimated: !!wp.is_estimated,
+          is_fallback: !!wp.is_fallback,
+          station_record: wp.station_record !== false,
         };
       }).filter((wp) => wp.lat !== null && wp.lng !== null);
 
@@ -610,6 +699,10 @@
                 name: wp.name || "Fuel Stop",
                 address: wp.address || "",
                 type: wp.type || "Refuel Stop",
+                progress_ratio: wp.progress_ratio,
+                is_estimated: !!wp.is_estimated,
+                is_fallback: !!wp.is_fallback,
+                station_record: wp.station_record !== false,
               };
             })
             .filter((wp) => wp.lat !== null && wp.lng !== null)
@@ -646,7 +739,7 @@
       return route;
     }
 
-    if (stationHasCoords) {
+    if (stationIsVerified) {
       route.waypoints.push({
         lat: stationLat,
         lng: stationLon,
@@ -662,7 +755,7 @@
       return route;
     }
 
-    if (stationHasCoords) {
+    if (stationIsVerified) {
       route.path = [
         [currentPayload.origin.lat, currentPayload.origin.lng],
         [stationLat, stationLon],

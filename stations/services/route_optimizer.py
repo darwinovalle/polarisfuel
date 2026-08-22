@@ -106,6 +106,49 @@ class RouteOptimizer:
             candidate_stations=candidate_stations,
         )
         if multi_stop_plans:
+            direct_plans = [
+                plan
+                for plan in multi_stop_plans
+                if plan.node_ids == ("START", "END")
+            ]
+            route_distance_m = max(
+                sum(edge.distance_m for edge in plan.edges)
+                for plan in multi_stop_plans
+            )
+            minimum_stop_count = min(
+                len(plan.node_ids) - 2 for plan in multi_stop_plans
+            )
+            multi_stop_plans = [
+                plan
+                for plan in multi_stop_plans
+                if len(plan.node_ids) - 2 == minimum_stop_count
+            ]
+            if minimum_stop_count > 0:
+                initial_reach_ratio = min(
+                    1.0,
+                    (
+                        self.tank_capacity_gal
+                        * self.start_fuel_percent
+                        / 100.0
+                        * self.vehicle_miles_per_gallon
+                    )
+                    / (
+                        sum(edge.distance_m for edge in direct_plans[0].edges)
+                        if direct_plans
+                        else route_distance_m
+                    ),
+                )
+                first_stop_floor = min(0.5, initial_reach_ratio)
+                window_plans = [
+                    plan
+                    for plan in multi_stop_plans
+                    if first_stop_floor
+                    <= self._plan_progress(plan, candidate_stations, origin, destination)
+                    <= initial_reach_ratio + 0.03
+                ]
+                if window_plans:
+                    multi_stop_plans = window_plans
+
             reference_price = sum(
                 float(station["retail_price"]) for station in candidate_stations
             ) / len(candidate_stations)
@@ -249,6 +292,29 @@ class RouteOptimizer:
             "refuel_waypoints": stops,
             "geometry": geometry,
         }
+
+    @staticmethod
+    def _plan_progress(plan, candidate_stations, origin, destination):
+        station_ids = plan.node_ids[1:-1]
+        if not station_ids:
+            return 1.0
+        station_by_id = {str(item["id"]): item for item in candidate_stations}
+        station = station_by_id.get(station_ids[0], {})
+        if station.get("progress_ratio") is not None:
+            return float(station["progress_ratio"])
+
+        origin_lon = float(origin["lon"])
+        destination_lon = float(destination["lon"])
+        if destination_lon == origin_lon:
+            return 0.0
+        return min(
+            1.0,
+            max(
+                0.0,
+                (float(station["lon"]) - origin_lon)
+                / (destination_lon - origin_lon),
+            ),
+        )
 
     @staticmethod
     def _normalize_coordinate(value: dict[str, Any], default_name: str) -> dict[str, Any]:

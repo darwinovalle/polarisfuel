@@ -133,6 +133,25 @@ def test_select_refuel_waypoints_are_ordered_and_fuel_feasible():
     assert progresses[0] <= 0.55
 
 
+def test_select_refuel_waypoints_prefers_cheapest_station_after_halfway():
+    station_pool = [
+        {"id": "near", "name": "Near", "lat": 10.5, "lon": -99.5, "retail_price": 2.0, "progress_ratio": 0.25, "corridor_distance_m": 500.0, "synthetic": False},
+        {"id": "mid", "name": "Mid", "lat": 13.0, "lon": -97.0, "retail_price": 3.5, "progress_ratio": 0.55, "corridor_distance_m": 500.0, "synthetic": False},
+        {"id": "cheap", "name": "Cheap", "lat": 14.0, "lon": -96.0, "retail_price": 2.5, "progress_ratio": 0.70, "corridor_distance_m": 500.0, "synthetic": False},
+    ]
+
+    selected = views.select_refuel_waypoints(
+        origin_coords={"lat": 10.0, "lon": -100.0},
+        destination_coords={"lat": 16.0, "lon": -94.0},
+        station_pool=station_pool,
+        required_stops=1,
+        initial_reach_ratio=0.80,
+        max_leg_ratio=0.80,
+    )
+
+    assert selected[0]["station_id"] == "cheap"
+
+
 def test_distance_to_polyline_follows_route_shape():
     straight_distance = views.distance_point_to_segment_m(
         point_lat=1.0,
@@ -149,6 +168,26 @@ def test_distance_to_polyline_follows_route_shape():
     )
 
     assert route_distance < straight_distance
+
+
+def test_build_route_segments_orders_stops_and_exposes_both_leg_distances():
+    segments = views.build_route_segments(
+        origin={"lat": 0.0, "lon": 0.0},
+        destination={"lat": 0.0, "lon": 10.0},
+        stops=[
+            {"name": "Second", "lat": 0.0, "lng": 8.0, "progress_ratio": 0.8},
+            {"name": "First", "lat": 0.0, "lng": 3.0, "progress_ratio": 0.3},
+        ],
+        route_geometry=[[0.0, 0.0], [0.0, 10.0]],
+        route_distance_m=100000.0,
+    )
+
+    assert [stop["name"] for stop in segments["stops"]] == ["First", "Second"]
+    assert segments["stops"][0]["distance_from_previous_m"] == pytest.approx(30000.0)
+    assert segments["stops"][0]["distance_to_next_m"] == pytest.approx(70000.0)
+    assert segments["stops"][1]["distance_from_previous_m"] == pytest.approx(50000.0)
+    assert segments["stops"][1]["distance_to_next_m"] == pytest.approx(20000.0)
+    assert segments["destination_distance_m"] == pytest.approx(20000.0)
 
 
 class DirectAlternativesProvider:

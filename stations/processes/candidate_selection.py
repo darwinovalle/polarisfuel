@@ -240,6 +240,7 @@ def build_real_station_candidates(
                 "lon": station_lon,
                 "retail_price": float(cp.retail_price),
                 "synthetic": False,
+                "station_record": True,
                 "progress_ratio": progress_ratio,
                 "corridor_distance_m": corridor_distance_m,
                 "road_detour_m": road_detour_m,
@@ -372,6 +373,7 @@ def build_state_corridor_fallback_candidates(
                 "lon": projected_lon,
                 "retail_price": float(cp.retail_price),
                 "synthetic": True,
+                "station_record": True,
                 "progress_ratio": clamped_progress,
                 "corridor_distance_m": corridor_distance_m,
             }
@@ -478,6 +480,7 @@ def build_synthetic_candidates(
                 "lon": lon,
                 "retail_price": float(cp.retail_price),
                 "synthetic": True,
+                "station_record": True,
                 "progress_ratio": min(1.0, max(0.0, progress_ratio)),
                 "corridor_distance_m": corridor_distance_m,
             }
@@ -671,6 +674,19 @@ def select_refuel_waypoints(
         if real_candidate_pool:
             candidate_pool = real_candidate_pool
 
+        first_leg_price_window = (
+            stop_index == 0
+            and clamped_initial_reach >= 0.5
+        )
+        if first_leg_price_window:
+            price_window = [
+                station
+                for station in candidate_pool
+                if 0.5 <= float(station["progress_ratio"]) <= leg_limit + 0.01
+            ]
+            if price_window:
+                candidate_pool = price_window
+
         for station in candidate_pool:
             progress_delta = float(station["progress_ratio"]) - target_progress
             progress_penalty = abs(progress_delta) * 100.0
@@ -678,9 +694,9 @@ def select_refuel_waypoints(
                 progress_penalty *= 1.25
 
             score = (
-                progress_penalty
+                (float(station["retail_price"]) if first_leg_price_window else progress_penalty)
                 + (station["corridor_distance_m"] / 50000.0)
-                + (float(station["retail_price"]) / 10.0)
+                + (0.0 if first_leg_price_window else float(station["retail_price"]) / 10.0)
             )
 
             if station.get("synthetic"):
@@ -723,6 +739,7 @@ def select_refuel_waypoints(
                 "retail_price": float(best_station["retail_price"]),
                 "progress_ratio": float(best_station["progress_ratio"]),
                 "is_estimated": bool(best_station.get("synthetic")),
+                "station_record": bool(best_station.get("station_record", True)),
                 "type": f"Refuel Stop {len(selected) + 1}",
             }
         )

@@ -1,4 +1,5 @@
 from functools import lru_cache
+import math
 import os
 
 from django.http import JsonResponse
@@ -490,6 +491,112 @@ def align_estimated_waypoints_to_route_geometry(waypoints: list, route_geometry:
     return aligned
 
 
+def _route_progress_for_point(point: dict, route_geometry: list) -> float | None:
+    if not isinstance(route_geometry, list) or len(route_geometry) < 2:
+        return None
+
+    cumulative_distances = [0.0]
+    for previous, current in zip(route_geometry, route_geometry[1:]):
+        try:
+            segment_distance = haversine_distance_m(
+                float(previous[0]),
+                float(previous[1]),
+                float(current[0]),
+                float(current[1]),
+            )
+        except (IndexError, TypeError, ValueError):
+            segment_distance = 0.0
+        cumulative_distances.append(cumulative_distances[-1] + segment_distance)
+
+    total_distance = cumulative_distances[-1]
+    if total_distance <= 0:
+        return None
+
+    try:
+        point_lat = float(point["lat"])
+        point_lon = float(point.get("lng", point.get("lon")))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    latitude_scale = 111_320.0
+    longitude_scale = latitude_scale * max(0.01, abs(math.cos(math.radians(point_lat))))
+    point_x = point_lon * longitude_scale
+    point_y = point_lat * latitude_scale
+    best_distance = None
+    best_progress = 0.0
+
+    for index, (start, end) in enumerate(zip(route_geometry, route_geometry[1:])):
+        start_x = float(start[1]) * longitude_scale
+        start_y = float(start[0]) * latitude_scale
+        end_x = float(end[1]) * longitude_scale
+        end_y = float(end[0]) * latitude_scale
+        delta_x = end_x - start_x
+        delta_y = end_y - start_y
+        segment_squared = (delta_x * delta_x) + (delta_y * delta_y)
+        projection = (
+            ((point_x - start_x) * delta_x) + ((point_y - start_y) * delta_y)
+        ) / segment_squared if segment_squared else 0.0
+        projection = min(1.0, max(0.0, projection))
+        projected_x = start_x + (projection * delta_x)
+        projected_y = start_y + (projection * delta_y)
+        distance_squared = (
+            (point_x - projected_x) ** 2
+            + (point_y - projected_y) ** 2
+        )
+        if best_distance is None or distance_squared < best_distance:
+            best_distance = distance_squared
+            best_progress = (
+                cumulative_distances[index]
+                + (projection * (cumulative_distances[index + 1] - cumulative_distances[index]))
+            ) / total_distance
+
+    return best_progress
+
+
+def build_route_segments(
+    origin: dict,
+    destination: dict,
+    stops: list,
+    route_geometry: list,
+    route_distance_m: float,
+) -> dict:
+    """Build ordered itinerary legs using the rendered route geometry."""
+    ordered_stops = sorted(
+        [dict(stop) for stop in stops],
+        key=lambda stop: float(stop.get("progress_ratio", 0.0)),
+    )
+    progress_points = []
+    for stop in ordered_stops:
+        geometry_progress = _route_progress_for_point(stop, route_geometry)
+        progress_points.append(
+            geometry_progress
+            if geometry_progress is not None
+            else min(1.0, max(0.0, float(stop.get("progress_ratio", 0.0))))
+        )
+
+    previous_progress = 0.0
+    for stop, progress in zip(ordered_stops, progress_points):
+        distance_from_previous_m = max(
+            0.0,
+            (progress - previous_progress) * float(route_distance_m),
+        )
+        stop["distance_from_previous_m"] = distance_from_previous_m
+        stop["distance_to_next_m"] = max(
+            0.0,
+            (1.0 - progress) * float(route_distance_m),
+        )
+        previous_progress = max(previous_progress, progress)
+
+    destination_distance_m = max(
+        0.0,
+        (1.0 - previous_progress) * float(route_distance_m),
+    )
+    return {
+        "stops": ordered_stops,
+        "destination_distance_m": destination_distance_m,
+    }
+
+
 def build_fuel_plan(
     distance_m: float,
     mpg: float = DEFAULT_VEHICLE_MPG,
@@ -823,6 +930,7 @@ def optimize_route(request):
                 "lng": station["lon"],
                 "station_id": station["id"],
                 "is_estimated": bool(station.get("synthetic", False)),
+                "station_record": bool(station.get("station_record", True)),
             }
             for station in best.get("stations", [])
         ]
@@ -916,13 +1024,25 @@ def optimize_route(request):
                 shared_waypoints=waypoints,
             )
 
-    if real_station_pool_count <= 0 and waypoints:
-        for index, stop in enumerate(waypoints):
-            stop["station_id"] = None
-            stop["name"] = f"Estimated Fuel Stop {index + 1}"
-            stop["address"] = "Estimated along route (provider fallback)"
-            stop["retail_price"] = None
-            stop["is_estimated"] = True
+    synthetic_fallback_points = []
+    verified_waypoints = []
+    for index, stop in enumerate(waypoints):
+        if stop.get("station_record", True) or not stop.get("is_estimated"):
+            verified_waypoints.append(stop)
+            continue
+
+        synthetic_fallback_points.append(
+            {
+                "lat": float(stop["lat"]),
+                "lng": float(stop["lng"]),
+                "name": f"Minimum Refuel Point {index + 1}",
+                "address": "Estimated minimum fuel-range location",
+                "progress_ratio": float(stop.get("progress_ratio", 0.0)),
+                "is_estimated": True,
+                "is_fallback": True,
+            }
+        )
+    waypoints = verified_waypoints
 
     all_estimated_waypoints = bool(waypoints) and all(stop.get("is_estimated") for stop in waypoints)
     using_direct_metrics_for_estimated_stops = False
@@ -962,7 +1082,11 @@ def optimize_route(request):
         )
         using_direct_metrics_for_estimated_stops = True
 
-    estimated_waypoint_count = sum(1 for stop in waypoints if stop.get("is_estimated"))
+    estimated_waypoint_count = sum(
+        1
+        for stop in [*waypoints, *synthetic_fallback_points]
+        if stop.get("is_estimated")
+    )
     notices = []
 
     if result.get("multi_stop_search_used"):
@@ -1001,6 +1125,90 @@ def optimize_route(request):
             "Distance and duration are based on the direct route because estimated stop coordinates are approximate."
         )
 
+    fallback_points = synthetic_fallback_points
+    if fuel_plan["min_refuel_stops"] > 0 and fuel_plan["distance_mi"] > 0:
+        initial_range_ratio = (
+            fuel_plan["initial_range_mi"] / fuel_plan["distance_mi"]
+        )
+        max_range_ratio = fuel_plan["max_range_mi"] / fuel_plan["distance_mi"]
+        target_progresses = [
+            min(0.98, max(0.02, initial_range_ratio + (index * max_range_ratio)))
+            for index in range(fuel_plan["min_refuel_stops"])
+        ]
+        station_progresses = [
+            float(
+                stop.get(
+                    "progress_ratio",
+                    project_progress_ratio(
+                        point_lat=float(stop["lat"]),
+                        point_lon=float(stop["lng"]),
+                        origin_lat=float(result["origin"]["lat"]),
+                        origin_lon=float(result["origin"]["lon"]),
+                        destination_lat=float(result["destination"]["lat"]),
+                        destination_lon=float(result["destination"]["lon"]),
+                    ),
+                )
+            )
+            for stop in waypoints
+        ]
+        matched_indexes = set()
+        unmatched_targets = []
+        for target_progress in target_progresses:
+            available = [
+                (abs(progress - target_progress), index)
+                for index, progress in enumerate(station_progresses)
+                if index not in matched_indexes
+            ]
+            if available and min(available)[0] <= 0.12:
+                matched_indexes.add(min(available)[1])
+            else:
+                unmatched_targets.append(target_progress)
+
+        missing_stop_count = max(
+            0,
+            fuel_plan["min_refuel_stops"]
+            - len(waypoints)
+            - len(synthetic_fallback_points),
+        )
+        for index, progress in enumerate(unmatched_targets[:missing_stop_count]):
+
+            fallback_points.append(
+                {
+                    "lat": result["origin"]["lat"]
+                    + ((result["destination"]["lat"] - result["origin"]["lat"]) * progress),
+                    "lng": result["origin"]["lon"]
+                    + ((result["destination"]["lon"] - result["origin"]["lon"]) * progress),
+                    "name": f"Minimum Refuel Point {index + 1}",
+                    "address": "Estimated minimum fuel-range location",
+                    "progress_ratio": progress,
+                    "is_estimated": True,
+                    "is_fallback": True,
+                }
+            )
+
+    fallback_route_geometry = path if len(path) > 1 else (
+        direct_route_snapshot or {}
+    ).get("geometry", [])
+    fallback_points = align_estimated_waypoints_to_route_geometry(
+        fallback_points,
+        fallback_route_geometry,
+    )
+
+    route_segments = build_route_segments(
+        origin=result["origin"],
+        destination=result["destination"],
+        stops=[*waypoints, *fallback_points],
+        route_geometry=path,
+        route_distance_m=float(best["distance_m"]),
+    )
+    ordered_points = route_segments["stops"]
+
+    if fallback_points:
+        notices.append(
+            "Red markers show minimum refuel-range points estimated from the "
+            "vehicle parameters; they are not verified fuel stations."
+        )
+
     response = {
         "origin": {
             "lat": result["origin"]["lat"],
@@ -1013,6 +1221,8 @@ def optimize_route(request):
             "name": destination,
         },
         "waypoints": waypoints,
+        "fallback_points": fallback_points,
+        "route_segments": route_segments,
         "distance_m": best["distance_m"],
         "duration_s": best["duration_s"],
         "fuel_cost": best["estimated_fuel_cost"],
