@@ -106,8 +106,11 @@ class RouteOptimizer:
             candidate_stations=candidate_stations,
         )
         if multi_stop_plans:
+            reference_price = sum(
+                float(station["retail_price"]) for station in candidate_stations
+            ) / len(candidate_stations)
             plan_alternatives = [
-                self._plan_to_alternative(plan, candidate_stations)
+                self._plan_to_alternative(plan, candidate_stations, reference_price)
                 for plan in multi_stop_plans
             ]
             self._apply_scores(plan_alternatives, weights, cost_key="fuel_cost")
@@ -193,10 +196,13 @@ class RouteOptimizer:
         return search_feasible_route_plans(nodes, edges, initial_state)
 
     @staticmethod
-    def _plan_to_alternative(plan, candidate_stations):
+    def _plan_to_alternative(plan, candidate_stations, reference_price):
         stations_by_id = {str(item["id"]): item for item in candidate_stations}
         stop_ids = [node_id for node_id in plan.node_ids[1:-1]]
         stops = [stations_by_id[node_id] for node_id in stop_ids]
+        fuel_cost = plan.fuel_cost
+        if not stops:
+            fuel_cost = sum(edge.fuel_consumed_gal for edge in plan.edges) * reference_price
         return {
             "station": stops[0] if stops else {
                 "id": "direct",
@@ -209,8 +215,8 @@ class RouteOptimizer:
             "distance_m": plan.distance_m,
             "duration_s": plan.duration_s,
             "detour_m": plan.detour_m,
-            "fuel_cost": plan.fuel_cost,
-            "estimated_fuel_cost": plan.fuel_cost,
+            "fuel_cost": fuel_cost,
+            "estimated_fuel_cost": fuel_cost,
             "fuel_purchases": list(plan.fuel_purchases),
             "refuel_waypoints": stops,
             "geometry": "",

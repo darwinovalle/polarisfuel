@@ -74,7 +74,7 @@ omitted so the remaining graph can still produce a valid plan.
 
 ## Phase 4: Validate and explain decisions
 
-- [ ] Compare direct and fuel-stop plans using the same scoring model.
+- [x] Compare direct and fuel-stop plans using the same scoring model.
 - [ ] Return total cost, duration, stops, gallons purchased, and detour details.
 - [ ] Add deterministic tests covering Time Weight, Price Weight, MPG, tank
   capacity, and starting fuel.
@@ -87,6 +87,11 @@ omitted so the remaining graph can still produce a valid plan.
   parameter assumptions.
 - Tests demonstrate expected changes when each user parameter changes.
 - Provider outages and estimated station locations are clearly identified.
+
+When a complete route graph is available, the optimizer includes the direct
+START-to-END plan alongside station-stop plans and normalizes duration and fuel
+cost across that shared alternative set. The view now preserves those scored
+plans instead of replacing them with the legacy direct-route preview.
 
 ## Checkpoint workflow
 
