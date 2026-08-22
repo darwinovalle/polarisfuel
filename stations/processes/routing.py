@@ -211,6 +211,7 @@ def build_direct_route_alternatives(
     build_path_with_waypoints_fn,
     max_options: int,
     default_vehicle_mpg: float,
+    weights: dict | None = None,
 ):
     origin = {
         "lat": float(origin_coords["lat"]),
@@ -223,6 +224,12 @@ def build_direct_route_alternatives(
 
     safe_mpg = vehicle_mpg if vehicle_mpg > 0 else default_vehicle_mpg
     safe_price = reference_fuel_price if reference_fuel_price > 0 else 3.75
+    weights = weights or {"time": 0.6, "price": 0.4}
+    weight_total = float(weights.get("time", 0.0)) + float(weights.get("price", 0.0))
+    if weight_total <= 0:
+        raise ValueError("weights must have positive total")
+    time_weight = float(weights.get("time", 0.0)) / weight_total
+    price_weight = float(weights.get("price", 0.0)) / weight_total
 
     for provider in providers:
         if provider is None:
@@ -287,7 +294,7 @@ def build_direct_route_alternatives(
 
             item["time_norm"] = time_norm
             item["price_norm"] = price_norm
-            item["score"] = time_norm
+            item["score"] = (time_weight * time_norm) + (price_weight * price_norm)
             item["station"] = {
                 "id": f"direct-{index + 1}",
                 "name": f"Direct Route #{index + 1}",

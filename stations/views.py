@@ -313,6 +313,7 @@ def build_direct_route_alternatives(
     vehicle_mpg: float,
     reference_fuel_price: float,
     max_options: int = 3,
+    weights: dict | None = None,
 ):
     return routing.build_direct_route_alternatives(
         origin_coords=origin_coords,
@@ -324,6 +325,7 @@ def build_direct_route_alternatives(
         build_path_with_waypoints_fn=build_path_with_waypoints,
         max_options=max_options,
         default_vehicle_mpg=DEFAULT_VEHICLE_MPG,
+        weights=weights,
     )
 
 
@@ -718,6 +720,7 @@ def optimize_route(request):
             vehicle_mpg=vehicle_mpg,
             reference_fuel_price=reference_fuel_price,
             max_options=MAX_CANDIDATES,
+            weights={"time": time_weight, "price": price_weight},
         )
 
         if direct_alternatives:
