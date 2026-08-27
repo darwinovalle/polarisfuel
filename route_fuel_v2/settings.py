@@ -43,6 +43,9 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ]
 
+# Carto basemap tile API key (public browser key used by the Leaflet map).
+CARTO_API_KEY = os.getenv("CARTO_API_KEY", "")
+
 # Production security hardening — only active when DEBUG is off.
 if not DEBUG:
     # Trust the X-Forwarded-Proto header set by the ALB when it terminates TLS.

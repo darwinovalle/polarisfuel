@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="{% static 'stations/css/help-sidebar.css' %}" />
   <link rel="stylesheet" href="{% static 'stations/css/intro-modal.css' %}" />
 </head>
-<body data-optimize-url="{% url 'stations-optimize' %}" data-suggest-url="{% url 'stations-suggest' %}">
+<body data-optimize-url="{% url 'stations-optimize' %}" data-suggest-url="{% url 'stations-suggest' %}" data-carto-api-key="{{ CARTO_API_KEY }}">
   <div id="introModalBackdrop" class="intro-modal-backdrop" hidden></div>
 
   <section id="introModal" class="intro-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="introModalTitle" hidden>
@@ -300,7 +300,7 @@
   </aside>
 
   <script src="{% static 'stations/vendor/leaflet/leaflet.js' %}"></script>
-  <script src="{% static 'stations/js/page.js' %}?v=9"></script>
+  <script src="{% static 'stations/js/page.js' %}?v=10"></script>
   <script src="{% static 'stations/js/help-sidebar.js' %}"></script>
   <script src="{% static 'stations/js/intro-modal.js' %}"></script>
 </body>

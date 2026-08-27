@@ -2,6 +2,7 @@ from functools import lru_cache
 import math
 import os
 
+from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
@@ -620,7 +621,11 @@ def parse_percentage_param(raw_value, field_name: str, default_value: float) -> 
 
 
 def stations_home(request):
-    return render(request, "stations/page.html")
+    return render(
+        request,
+        "stations/page.html",
+        {"CARTO_API_KEY": settings.CARTO_API_KEY},
+    )
 
 
 @require_GET

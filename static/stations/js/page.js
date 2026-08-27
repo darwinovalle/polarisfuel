@@ -15,7 +15,12 @@
 
   const map = L.map("map", { zoomControl: true }).setView([39.8283, -98.5795], 4);
 
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+  const cartoApiKey = bodyDataset.cartoApiKey || "";
+  const tileUrl =
+    "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" +
+    (cartoApiKey ? "?api_key=" + cartoApiKey : "");
+
+  L.tileLayer(tileUrl, {
     attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
     maxZoom: 19,
   }).addTo(map);
