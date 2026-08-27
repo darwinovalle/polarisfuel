@@ -47,9 +47,12 @@ CSRF_TRUSTED_ORIGINS = [
 if not DEBUG:
     # Trust the X-Forwarded-Proto header set by the ALB when it terminates TLS.
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    # These default to secure behavior. They can be relaxed via env vars
+    # for an interim HTTP-only phase (no TLS cert yet); re-enable once HTTPS
+    # is in place behind the load balancer.
+    SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "1").lower() in {"1", "true", "yes", "on"}
+    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
+    CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", "1").lower() in {"1", "true", "yes", "on"}
     SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "3600"))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
