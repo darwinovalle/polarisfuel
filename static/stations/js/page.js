@@ -18,7 +18,7 @@
   const cartoApiKey = bodyDataset.cartoApiKey || "";
   const tileUrl =
     "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" +
-    (cartoApiKey ? "?api_key=" + cartoApiKey : "");
+    (cartoApiKey ? "?key=" + cartoApiKey : "");
 
   L.tileLayer(tileUrl, {
     attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
