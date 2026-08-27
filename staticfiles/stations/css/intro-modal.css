@@ -1,0 +1,227 @@
+.intro-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1290;
+  background:
+    radial-gradient(circle at 20% 18%, rgba(59, 130, 246, 0.2), transparent 42%),
+    radial-gradient(circle at 78% 24%, rgba(34, 197, 94, 0.12), transparent 38%),
+    rgba(3, 3, 3, 0.86);
+  opacity: 0;
+  transition: opacity 0.24s ease;
+}
+
+.intro-modal-backdrop.is-visible {
+  opacity: 1;
+}
+
+.intro-modal-backdrop[hidden] {
+  display: none;
+}
+
+.intro-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: min(760px, calc(100vw - 34px));
+  max-height: calc(100vh - 34px);
+  z-index: 1300;
+  transform: translate(-50%, -47%);
+  opacity: 0;
+  background: linear-gradient(180deg, #0b0b0b 0%, #090909 100%);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  transition: transform 0.24s ease, opacity 0.24s ease;
+}
+
+.intro-modal.is-open {
+  transform: translate(-50%, -50%);
+  opacity: 1;
+}
+
+.intro-modal[hidden] {
+  display: none;
+}
+
+.intro-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.intro-modal-kicker {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.intro-modal-title {
+  margin: 0;
+  font-size: clamp(20px, 2.3vw, 27px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.intro-modal-close {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #111111;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.intro-modal-close:hover,
+.intro-modal-close:focus-visible {
+  border-color: #3b82f6;
+}
+
+.intro-modal-content {
+  padding: 16px 20px 18px;
+  overflow: auto;
+  display: grid;
+  gap: 14px;
+}
+
+.intro-modal-lead {
+  margin: 0;
+  color: #e4e4e7;
+  line-height: 1.55;
+  font-size: 14px;
+}
+
+.intro-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.intro-modal-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: #111111;
+}
+
+.intro-modal-card h3 {
+  margin: 0 0 7px;
+  font-size: 13px;
+  color: #f4f4f5;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.intro-modal-card p {
+  margin: 0;
+  font-size: 13px;
+  color: #d4d4d8;
+  line-height: 1.45;
+}
+
+.intro-modal-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.intro-modal-pill {
+  border-radius: 999px;
+  padding: 5px 9px;
+  border: 1px solid #2f2f33;
+  background: #131316;
+  color: #e4e4e7;
+  font-size: 12px;
+}
+
+.intro-modal-warning {
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.1);
+  color: #fde68a;
+  padding: 11px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.intro-modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding: 12px 20px 16px;
+}
+
+.intro-modal-contact {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.intro-modal-contact a {
+  color: #93c5fd;
+  text-decoration: none;
+}
+
+.intro-modal-contact a:hover {
+  text-decoration: underline;
+}
+
+.intro-modal-continue {
+  height: 40px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 16px;
+  background: #f4f4f5;
+  color: #030303;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.intro-modal-continue:hover {
+  opacity: 0.92;
+}
+
+body.intro-modal-open {
+  overflow: hidden;
+}
+
+@media (max-width: 860px) {
+  .intro-modal {
+    width: min(680px, calc(100vw - 18px));
+    max-height: calc(100vh - 18px);
+  }
+
+  .intro-modal-header {
+    padding: 14px 14px 10px;
+  }
+
+  .intro-modal-content {
+    padding: 12px 14px 14px;
+    gap: 10px;
+  }
+
+  .intro-modal-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .intro-modal-card {
+    padding: 10px;
+  }
+
+  .intro-modal-footer {
+    padding: 10px 14px 14px;
+  }
+}

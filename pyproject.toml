@@ -10,11 +10,13 @@ dependencies = [
     "django-filter>=25.2",
     "djangorestframework>=3.17.1",
     "djangorestframework-simplejwt>=5.5.1",
+    "gunicorn>=23.0.0",
     "httpx>=0.28.1",
     "openpyxl>=3.1.5",
     "psycopg[binary]>=3.3.3",
     "python-dotenv>=1.2.2",
     "redis>=7.4.0",
+    "whitenoise>=6.8.2",
 ]
 
 [dependency-groups]
