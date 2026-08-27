@@ -1,4 +1,4 @@
-# Route Fuel v2
+# PolarisFuel
 
 This project is a Django monolith that:
 - imports fuel station pricing data from CSV or Excel into PostgreSQL,
